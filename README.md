@@ -21,3 +21,5 @@ go version
 
 ## Vscode
 Reference to page https://medium.com/backend-habit/setting-golang-plugin-on-vscode-for-autocomplete-and-auto-import-30bf5c58138a to install the vscode golang plugins
+
+Install `REST Client` plugin as well
