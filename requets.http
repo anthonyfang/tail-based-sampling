@@ -1,0 +1,21 @@
+### Common
+GET http://localhost:8000/ready HTTP/1.1
+
+
+### Client
+
+POST http://localhost:8000/setParameter HTTP/1.1
+content-type: application/json
+
+{
+    "port":"8080"
+}
+
+### Backend
+POST http://localhost:8002/setParameter HTTP/1.1
+content-type: application/json
+
+{
+    "port":"8080"
+}
+

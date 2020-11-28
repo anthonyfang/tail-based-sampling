@@ -8,6 +8,7 @@ import (
 
     BackendHandler "tail-based-sampling/src/backend"
     CliendHandler "tail-based-sampling/src/client"
+    CommonHandler "tail-based-sampling/src/common"
 )
 
 func main() {
@@ -22,7 +23,7 @@ func main() {
         return c.SendString(fmt.Sprintf("Server is running on port: %v", port))
     })
 
-    SetParamterRouter(app, port)
+    app.Post("/setParameter", CommonHandler.SetParameterHandler)
 
     if port == "8002" {
         app.Post("/setWrongTraceId", BackendHandler.SetWrongTraceIDHandler)
@@ -40,14 +41,4 @@ func GetEnvDefault(key string, defVal string) string {
         return defVal
     }
     return val
-}
-
-// SetParamterRouter is a router to handle the setParamter endpoint
-func SetParamterRouter(app *fiber.App, port string) {
-    app.Post("/setParameter", func(c *fiber.Ctx) error {
-        if port == "8002" {
-            return c.SendString("Backend Service Do not support!")
-        }
-        return c.SendString("OK!")
-    })
 }
