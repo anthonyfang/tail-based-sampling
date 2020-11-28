@@ -11,6 +11,11 @@ content-type: application/json
     "port":"8080"
 }
 
+###
+
+GET http://localhost:8000/getWrongTrace/123456 HTTP/1.1
+
+
 ### Backend
 POST http://localhost:8002/setParameter HTTP/1.1
 content-type: application/json
@@ -19,3 +24,10 @@ content-type: application/json
     "port":"8080"
 }
 
+###
+POST http://localhost:8002/setWrongTraceId HTTP/1.1
+content-type: application/json
+
+{
+    "id":"654321"
+}
