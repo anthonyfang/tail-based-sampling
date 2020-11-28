@@ -40,8 +40,12 @@ Development/Debug:
 
 ```sh
 # start up and logon the container for debug/develop
+# if windows, run
+# bash ./dockerize/scripts/dev.sh
 make dev
 
 # shutdown the containers
+# if windows, run
+# bash ./dockerize/scripts/shutdown.sh
 make shutdown
 ```
