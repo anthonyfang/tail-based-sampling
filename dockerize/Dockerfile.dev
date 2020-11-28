@@ -1,0 +1,11 @@
+FROM golang:alpine
+
+WORKDIR /tail-based-sampling
+
+RUN echo "ipv6" >> /etc/modules && \
+    apk update && \
+    apk add --no-cache bash git curl && \
+    go mod init tail-based-sampling && \
+    go get github.com/gofiber/fiber/v2
+
+CMD ["bash"]

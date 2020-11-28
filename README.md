@@ -23,3 +23,25 @@ go version
 Reference to page https://medium.com/backend-habit/setting-golang-plugin-on-vscode-for-autocomplete-and-auto-import-30bf5c58138a to install the vscode golang plugins
 
 Install `REST Client` plugin as well
+
+## Run the project
+```sh
+go run server.go
+```
+
+## Run with docker compose
+We can't access `locahost:8080` on our local machine because the network of the docker-compose is using `host` mode. We only can access `locahost:8080, localhost:8000, localhost:8001, localhost:8002` within the container.
+
+Development/Debug:
++ Put those 2 track.data files under **datasource**
+ folder
++ Run `make dev` commands to start up the servers.
++ change the code in `vscode` , it will sync into the container automatically 
+
+```sh
+# start up and logon the container for debug/develop
+make dev
+
+# shutdown the containers
+make shutdown
+```

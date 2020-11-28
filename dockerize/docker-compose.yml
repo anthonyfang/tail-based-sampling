@@ -1,0 +1,70 @@
+version: "3.8"
+services:
+  datasource:
+    build:
+      context: ..
+      dockerfile: ./dockerize/Dockerfile.datasource
+    container_name: 'tail-base-sampling-datasource'
+    command: sh -c "/app/node_modules/http-server/bin/http-server /app/data"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../datasource:/app/data
+    network_mode: host
+  client1:
+      build:
+        context: ..
+        dockerfile: ./dockerize/Dockerfile.dev
+      container_name: 'tail-base-sampling-client-1'
+      command: sh -c "go run server.go"
+      environment:
+        - SERVER_PORT=8000
+      ports:
+        - "8000:8000"
+      volumes:
+        - ../:/tail-based-sampling
+      deploy:
+        replicas: 1
+        resources:
+          limits:
+            cpus: "2"
+            memory: 4G
+      network_mode: host
+  client2:
+      build:
+        context: ..
+        dockerfile: ./dockerize/Dockerfile.dev
+      container_name: 'tail-base-sampling-client-2'
+      command: sh -c "go run server.go"
+      environment:
+        - SERVER_PORT=8001
+      ports:
+        - "8001:8001"
+      volumes:
+        - ../:/tail-based-sampling
+      deploy:
+        replicas: 1
+        resources:
+          limits:
+            cpus: "2"
+            memory: 4G
+      network_mode: host
+  backend:
+      build:
+        context: ..
+        dockerfile: ./dockerize/Dockerfile.dev
+      container_name: 'tail-base-sampling-backend-1'
+      command: sh -c "go run server.go"
+      environment:
+        - SERVER_PORT=8002
+      ports:
+        - "8002:8002"
+      volumes:
+        - ../:/tail-based-sampling
+      deploy:
+        replicas: 1
+        resources:
+          limits:
+            cpus: "1"
+            memory: 2G
+      network_mode: host
