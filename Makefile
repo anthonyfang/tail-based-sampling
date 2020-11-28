@@ -9,3 +9,6 @@ build-bin:
 
 run-prd: build-bin
 	sh ./dockerize/scripts/run-prd.sh
+
+start-up-datasource:
+	sh ./dockerize/scripts/start-up-datasource.sh

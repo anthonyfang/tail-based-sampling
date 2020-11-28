@@ -24,7 +24,15 @@ Reference to page https://medium.com/backend-habit/setting-golang-plugin-on-vsco
 
 Install `REST Client` plugin as well
 
-## Run the project
+## Run the project locally
+Start up the datasource service
+```sh
+# if windows, run
+# bash ./dockerize/scripts/start-up-datasource.sh
+make start-up-datasource
+```
+
+Start up the server locally:
 ```sh
 go run server.go
 ```
