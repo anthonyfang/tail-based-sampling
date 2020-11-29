@@ -1,5 +1,9 @@
 package common
 
+import (
+    "sync"
+)
+
 // RecordTemplate is a template for record down each line of trace record info
 type RecordTemplate struct {
     hasError      bool;
@@ -15,3 +19,6 @@ var CacheQueue = make(map[string]*RecordTemplate)
 func(data *RecordTemplate) UpdateRecord(record string) {
     data.records = append(data.records, record)
 }
+
+// CQLocker is a CacheQueue Locker
+var CQLocker = sync.Mutex{}
