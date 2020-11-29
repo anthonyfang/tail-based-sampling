@@ -1,8 +1,7 @@
 ### Common
 GET http://localhost:8000/ready HTTP/1.1
 
-
-### Client
+###
 
 POST http://localhost:8000/setParameter HTTP/1.1
 content-type: application/json
@@ -11,7 +10,9 @@ content-type: application/json
     "port":"8080"
 }
 
-###
+GET http://localhost:8000/setParameter?port=9000 HTTP/1.1
+
+### Client
 
 GET http://localhost:8000/getWrongTrace/123456 HTTP/1.1
 

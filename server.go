@@ -22,7 +22,8 @@ func main() {
         return c.SendString(fmt.Sprintf("Server is running on port: %v", port))
     })
 
-    app.Post("/setParameter", Common.SetParameterHandler)
+    app.Post("/setParameter", Common.SetParameterPostHandler)
+    app.Get("/setParameter", Common.SetParameterGetHandler)
 
     if port == "8002" {
         app.Post("/setWrongTraceId", BackendHandler.SetWrongTraceIDHandler)

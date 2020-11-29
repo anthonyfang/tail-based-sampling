@@ -1,17 +1,18 @@
 package common
 
 import (
+	"bufio"
 	"fmt"
-    "bufio"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 )
 
-// SetParameterHandler is use for handling the SetParameterHandler endpoint
-func SetParameterHandler(c *fiber.Ctx) error {
+// SetParameterPostHandler is use for handling the SetParameterHandler endpoint
+func SetParameterPostHandler(c *fiber.Ctx) error {
 	type Request struct {
         Port string `json:"port"`
     }
@@ -26,9 +27,27 @@ func SetParameterHandler(c *fiber.Ctx) error {
     }
     os.Setenv("UPLOAD_SERVER_PORT", body.Port)
 
-    go fetchData(body.Port)
+    serverPort := GetEnvDefault("SERVER_PORT", "8002")
+
+    if serverPort != "8002" {
+        go fetchData(body.Port)
+    }
 
     return c.SendString(fmt.Sprintf("OK! Upload server port is: %v", body.Port))
+}
+
+// SetParameterGetHandler is use for handling the SetParameterHandler endpoint
+func SetParameterGetHandler(c *fiber.Ctx) error {
+	port := c.Params("port")
+    os.Setenv("UPLOAD_SERVER_PORT", port)
+
+    serverPort := GetEnvDefault("SERVER_PORT", "8002")
+
+    if serverPort != "8002" {
+        go fetchData(port)
+    }
+
+    return c.SendString(fmt.Sprintf("OK! Upload server port is: %v", port))
 }
 
 // fetchData is use for fetching the data file from datasource server
@@ -36,9 +55,9 @@ func fetchData(port string){
     var url string
     switch currentServerPort := GetEnvDefault("SERVER_PORT", ""); currentServerPort {
     case "8000":
-        url = fmt.Sprintf("http://localhost:%v/trace1.data", port)
+        url = fmt.Sprintf("http://localhost:%v/trace1-small.data", port)
     case "8001":
-        url = fmt.Sprintf("http://localhost:%v/trace2.data", port)
+        url = fmt.Sprintf("http://localhost:%v/trace2-small.data", port)
     default:
         url = ""
     }
@@ -52,8 +71,33 @@ func fetchData(port string){
         defer resp.Body.Close()
         scanner := bufio.NewScanner(resp.Body)
 
+        i := 0
         for scanner.Scan() {
+            recordString := scanner.Text()
+            record := strings.Split(recordString, "|")
+            traceID := record[0]
+
+            // validate error record
+            hasError := false
+            if len(record) > 8 {
+                hasError = isErrorRecord(record[8])
+            }
+
+            // add the line to cacheQueue
+            data := &RecordTemplate{hasError, i, false, []string{}}
+            if len(CacheQueue[traceID].records) > 0 {
+                data = &RecordTemplate{hasError, i, false, CacheQueue[traceID].records}
+            }
+            data.UpdateRecord(recordString)
+
             fmt.Println(scanner.Text())
+
+            i++
         }
     }
+}
+
+func isErrorRecord(tags string) bool {
+    result := (!strings.Contains(tags, "http.status_code=200") || strings.Contains(tags, ""))
+    return result
 }
