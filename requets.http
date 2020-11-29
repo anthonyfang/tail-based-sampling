@@ -10,7 +10,8 @@ content-type: application/json
     "port":"8080"
 }
 
-GET http://localhost:8000/setParameter?port=9000 HTTP/1.1
+###
+GET http://localhost:8000/setParameter?port=8080 HTTP/1.1
 
 ### Client
 
