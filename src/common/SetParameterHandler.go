@@ -72,22 +72,24 @@ func fetchData(url string){
         // scanner := bufio.NewScanner(f)
 
         i := 0
-        lastCleanupIndex := i
+        // lastCleanupIndex := i
         for scanner.Scan() {
             recordString := scanner.Text()
             pushToCacheQueue(recordString, i)
             // fmt.Println(scanner.Text())
 
             // tigger the cleanup worker every 20000 record
-            if i - lastCleanupIndex > 20000 {
-                go cleanUpWorker(i)
-            }
+            // if i - lastCleanupIndex > 20000 {
+            //     go cleanUpWorker(i)
+            // }
             i++
         }
         
         fmt.Println("xxxxxxxxxxxxxxxxxx: ", i)
         for key, record := range CacheQueue {
-            fmt.Println("Key:", key, "=>", "Element:",record)
+            if record.hasError == true {
+                fmt.Println("Key:", key, "--", record.hasError)
+            }
         }
     }
     fmt.Println("################# : fetchingData END", time.Now())
@@ -97,7 +99,7 @@ func getURL(port string) string {
     var url string
     switch currentServerPort := GetEnvDefault("SERVER_PORT", ""); currentServerPort {
     case "8000":
-        url = fmt.Sprintf("http://localhost:%v/trace1-small.data", port)
+        url = fmt.Sprintf("http://localhost:%v/trace2-small.data", port)
     case "8001":
         url = fmt.Sprintf("http://localhost:%v/trace2-small.data", port)
     default:
@@ -121,7 +123,11 @@ func pushToCacheQueue(recordString string, currentLineNo int) {
     // add the line to cacheQueue
     data := &RecordTemplate{hasError, currentLineNo, false, []string{}}
     if CacheQueue[traceID] != nil {
-        data = &RecordTemplate{hasError, currentLineNo, false, CacheQueue[traceID].records}
+        newHasError := CacheQueue[traceID].hasError
+        if !newHasError {
+            newHasError = hasError
+        }
+        data = &RecordTemplate{newHasError, currentLineNo, false, CacheQueue[traceID].records}
     }
     data.UpdateRecord(recordString)
     CacheQueue[traceID] = data
@@ -129,7 +135,7 @@ func pushToCacheQueue(recordString string, currentLineNo int) {
 }
 
 func isErrorRecord(tags string) bool {
-    result := (!strings.Contains(tags, "http.status_code=200") || strings.Contains(tags, "error=1"))
+    result := (strings.Contains(tags, "http.status_code=") && !strings.Contains(tags, "http.status_code=200")) || strings.Contains(tags, "error=1")
     return result
 }
 
