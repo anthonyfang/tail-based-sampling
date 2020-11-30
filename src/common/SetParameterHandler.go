@@ -14,6 +14,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+var isRunning = false
+
 // SetParameterPostHandler is use for handling the SetParameterHandler endpoint
 func SetParameterPostHandler(c *fiber.Ctx) error {
     type Request struct {
@@ -32,7 +34,8 @@ func SetParameterPostHandler(c *fiber.Ctx) error {
 
     serverPort := GetEnvDefault("SERVER_PORT", "8002")
 
-    if serverPort != "8002" {
+    if serverPort != "8002" && !isRunning {
+        isRunning = true
         url := getURL(body.Port)
         go fetchData(url)
     }
@@ -74,13 +77,17 @@ func fetchData(url string){
         batchNo := 0
         for scanner.Scan() {
             recordString := scanner.Text()
-            pushToCacheQueue(recordString, batchNo)
+            go pushToCacheQueue(recordString, batchNo)
 
-            // tigger the cleanup worker every 20000 record
+            // tigger time window
             if i % 20000 == 0 {
-                BackupCacheQueue()
-                // Post traceIDs to backend
-                go postTraceIDs(batchNo)
+                wg.Add(1)
+                go func(batchNo int) {
+                    <-cacheQueueChan
+                    BackupCacheQueue()
+                    postTraceIDs(batchNo)
+                    defer wg.Done()
+                }(batchNo)
 
                 batchNo++
             }
@@ -88,11 +95,8 @@ func fetchData(url string){
         }
         
         fmt.Println("xxxxxxxxxxxxxxxxxx: ", i)
-        for key, record := range CacheQueue {
-            if record.HasError == true {
-                fmt.Println("Key:", key, "--", record.HasError)
-            }
-        }
+        wg.Wait()
+        go postFinishSignal()
     }
     fmt.Println("################# : fetchingData END", time.Now())
 }
@@ -134,6 +138,7 @@ func pushToCacheQueue(recordString string, batchNo int) {
     data.UpdateRecord(recordString)
     CacheQueue[traceID] = data
     CQLocker.Unlock()
+    cacheQueueChan <- "ok"
 }
 
 func isErrorRecord(tags string) bool {
@@ -142,6 +147,9 @@ func isErrorRecord(tags string) bool {
 }
 
 func postTraceIDs(batchNo int) {
+    if len(BadTraceList) == 0 || BadTraceList[string(batchNo)] == nil {
+        return
+    }
     mjson, err := json.Marshal(RecordTemplate {
         BatchNo: batchNo,
         Records: BadTraceList[string(batchNo)].Records,
@@ -151,6 +159,25 @@ func postTraceIDs(batchNo int) {
     }
 
     res, err := http.Post("http://localhost:8002/setWrongTraceId", "application/json", bytes.NewBuffer(mjson))
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer res.Body.Close()
+}
+
+func postFinishSignal() {
+    type finishSignalTemplate struct {
+        Port  string
+    }
+
+    mjson, err := json.Marshal(finishSignalTemplate {
+        Port: GetEnvDefault("SERVER_PORT", "8002"),
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    res, err := http.Post("http://localhost:8002/finish", "application/json", bytes.NewBuffer(mjson))
     if err != nil {
         log.Fatal(err)
     }

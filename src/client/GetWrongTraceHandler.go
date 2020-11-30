@@ -24,7 +24,7 @@ func GetWrongTraceHandler(c *fiber.Ctx) error {
     traceID := c.Params("traceID")
     batchNo, _ := strconv.Atoi(c.Params("batchNo"))
     data := &common.RecordTemplate{HasError: true, BatchNo: batchNo, Records:[]string{}}
-    generateFakeData()
+    // generateFakeData()
     common.CQLocker.Lock()
     if common.CacheQueueBk[traceID] != nil && common.CacheQueueBk[traceID].BatchNo == batchNo {
         data = common.CacheQueueBk[traceID]

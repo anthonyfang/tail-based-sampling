@@ -2,6 +2,12 @@
 GET http://localhost:8000/ready HTTP/1.1
 
 ###
+GET http://localhost:8001/ready HTTP/1.1
+
+###
+GET http://localhost:8002/ready HTTP/1.1
+
+### --------------------------------------------------
 
 POST http://localhost:8000/setParameter HTTP/1.1
 content-type: application/json
@@ -11,6 +17,22 @@ content-type: application/json
 }
 
 ###
+POST http://localhost:8001/setParameter HTTP/1.1
+content-type: application/json
+
+{
+    "port":"8080"
+}
+
+###
+POST http://localhost:8002/setParameter HTTP/1.1
+content-type: application/json
+
+{
+    "port":"8080"
+}
+
+### -------------------------------------------------
 GET http://localhost:8000/setParameter?port=8080 HTTP/1.1
 
 ### Client

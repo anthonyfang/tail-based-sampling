@@ -1,7 +1,7 @@
 package common
 
 import (
-    "sync"
+	"sync"
 )
 
 // RecordTemplate is a template for record down each line of trace record info
@@ -16,6 +16,10 @@ var CacheQueue = make(map[string]*RecordTemplate)
 var CacheQueueBk = make(map[string]*RecordTemplate)
 var BadTraceList = make(map[string]*RecordTemplate)
 
+var badListChan = make(chan string, 1)
+var cacheQueueChan = make(chan string, 1)
+var wg sync.WaitGroup
+
 
 // BackupCacheQueue is moving the cache queue to bk queue
 func BackupCacheQueue() {
@@ -25,13 +29,14 @@ func BackupCacheQueue() {
     BadTraceList = make(map[string]*RecordTemplate)
 
     for key, record := range CacheQueueBk {
-        data := &RecordTemplate{record.HasError, record.BatchNo, []string{}}
-        if BadTraceList[string(record.BatchNo)] != nil {
-            data = &RecordTemplate{record.HasError, record.BatchNo, BadTraceList[string(record.BatchNo)].Records}
+        if record.HasError {
+            data := &RecordTemplate{record.HasError, record.BatchNo, []string{}}
+            if BadTraceList[string(record.BatchNo)] != nil {
+                data = &RecordTemplate{record.HasError, record.BatchNo, BadTraceList[string(record.BatchNo)].Records}
+            }
+            data.UpdateRecord(key)
+            BadTraceList[string(record.BatchNo)] = data
         }
-        data.UpdateRecord(key)
-        
-        BadTraceList[string(record.BatchNo)] = data
     }
     CQLocker.Unlock()
 }

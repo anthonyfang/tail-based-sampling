@@ -26,19 +26,30 @@ func SetWrongTraceIDHandler(c *fiber.Ctx) error {
             "message": "Cannot parse Body JSON",
         })
     }
+    wg.Wait()
     go processing(body.BatchNo, body.Records)
 
     return c.SendString("OK!")
 }
 
-var clientHosts = []string{"http://localhost:8000", "http://localhost:8001"}
+// TODO
+// var clientHosts = []string{"http://localhost:8000", "http://localhost:8001"}
+var clientHosts = []string{"http://localhost:8000"}
 
 func processing(batchNo int, records []string) {
     // Request all the clients to get all the bad trace info
     for _, traceID := range records {
-        for _, url := range clientHosts {
-            go getWrongTraceInfo(url + "/getWrongTrace", batchNo, traceID)
-        }
+        wg.Add(1)
+
+        go func(traceID string) {
+            defer wg.Done()
+            bufferChan <- traceID
+            for _, url := range clientHosts {
+                go getWrongTraceInfo(url + "/getWrongTrace", batchNo, traceID)
+            }
+            <-bufferChan
+
+        }(traceID)
     }
 }
 

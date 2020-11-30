@@ -1,6 +1,7 @@
 package backend
 
 import(
+    "sync"
     "tail-based-sampling/src/common"
 )
 
@@ -12,3 +13,6 @@ type traceInfoStruct struct {
     traceID     string;
     batchNo     int;
 }
+
+var bufferChan = make(chan string, 15)
+var wg sync.WaitGroup
