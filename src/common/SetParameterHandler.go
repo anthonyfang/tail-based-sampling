@@ -1,15 +1,17 @@
 package common
 
 import (
-    "bufio"
-    "fmt"
-    "log"
-    "net/http"
-    "os"
-    "strings"
+	"bufio"
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"strings"
     "time"
 
-    "github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2"
 )
 
 // SetParameterPostHandler is use for handling the SetParameterHandler endpoint
@@ -67,28 +69,28 @@ func fetchData(url string){
         scanner := bufio.NewScanner(resp.Body)
         buf := make([]byte, 64*1024)
         scanner.Buffer(buf, bufio.MaxScanTokenSize)
-        // process(resp.Body)
-
-        // scanner := bufio.NewScanner(f)
 
         i := 0
-        // lastCleanupIndex := i
+        batchNo := 0
         for scanner.Scan() {
             recordString := scanner.Text()
-            pushToCacheQueue(recordString, i)
-            // fmt.Println(scanner.Text())
+            pushToCacheQueue(recordString, batchNo)
 
             // tigger the cleanup worker every 20000 record
-            // if i - lastCleanupIndex > 20000 {
-            //     go cleanUpWorker(i)
-            // }
+            if i % 20000 == 0 {
+                BackupCacheQueue()
+                // Post traceIDs to backend
+                go postTraceIDs(batchNo)
+
+                batchNo++
+            }
             i++
         }
         
         fmt.Println("xxxxxxxxxxxxxxxxxx: ", i)
         for key, record := range CacheQueue {
-            if record.hasError == true {
-                fmt.Println("Key:", key, "--", record.hasError)
+            if record.HasError == true {
+                fmt.Println("Key:", key, "--", record.HasError)
             }
         }
     }
@@ -109,7 +111,7 @@ func getURL(port string) string {
     return url
 }
 
-func pushToCacheQueue(recordString string, currentLineNo int) {
+func pushToCacheQueue(recordString string, batchNo int) {
     CQLocker.Lock()
     record := strings.Split(recordString, "|")
     traceID := record[0]
@@ -121,13 +123,13 @@ func pushToCacheQueue(recordString string, currentLineNo int) {
     }
 
     // add the line to cacheQueue
-    data := &RecordTemplate{hasError, currentLineNo, false, []string{}}
+    data := &RecordTemplate{hasError, batchNo, []string{}}
     if CacheQueue[traceID] != nil {
-        newHasError := CacheQueue[traceID].hasError
+        newHasError := CacheQueue[traceID].HasError
         if !newHasError {
             newHasError = hasError
         }
-        data = &RecordTemplate{newHasError, currentLineNo, false, CacheQueue[traceID].records}
+        data = &RecordTemplate{newHasError, batchNo, CacheQueue[traceID].Records}
     }
     data.UpdateRecord(recordString)
     CacheQueue[traceID] = data
@@ -139,13 +141,18 @@ func isErrorRecord(tags string) bool {
     return result
 }
 
-func cleanUpWorker(currentLineNo int) {
-    CQLocker.Lock()
-    for key, record := range CacheQueue {
-        if (currentLineNo - record.startLineNO > 2000 && !record.hasError || record.hasReport) {
-            // fmt.Println("---------------------------- Delete:", key)
-            delete(CacheQueue, key)
-        }
+func postTraceIDs(batchNo int) {
+    mjson, err := json.Marshal(RecordTemplate {
+        BatchNo: batchNo,
+        Records: BadTraceList[string(batchNo)].Records,
+    })
+    if err != nil {
+        log.Fatal(err)
     }
-    CQLocker.Unlock()
+
+    res, err := http.Post("http://localhost:8002/setWrongTraceId", "application/json", bytes.NewBuffer(mjson))
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer res.Body.Close()
 }

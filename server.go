@@ -28,7 +28,7 @@ func main() {
     if port == "8002" {
         app.Post("/setWrongTraceId", BackendHandler.SetWrongTraceIDHandler)
     } else {
-        app.Get("/getWrongTrace/:id", CliendHandler.GetWrongTraceHandler)
+        app.Get("/getWrongTrace/:batchNo/:traceID", CliendHandler.GetWrongTraceHandler)
     }
 
     app.Listen(":" + port)
