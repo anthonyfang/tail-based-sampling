@@ -11,7 +11,7 @@ import (
 	"tail-based-sampling/src/common"
 )
 
-func SendCheckSum() {
+func sendCheckSum() {
 	m := map[string]string{"e6ff221e869375a": "1757AA5015E69E84F47B08E55DB398A2"}
 	for key, value := range m {
 		m[key] = common.MD5(value)
