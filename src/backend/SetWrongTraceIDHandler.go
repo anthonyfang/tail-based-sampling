@@ -56,11 +56,15 @@ func processing(batchNo int, records []string) {
                 wgHostData.Wait()
 
                 // sort
-                if resultWorkingQueue[traceID] != nil {
-                    resultWorkingQueue[traceID].SortRecords()
-                }
+                resultQueueLocker.Lock()
+                traceInfo := resultWorkingQueue[traceID]
+                if traceInfo != nil {
+                    traceInfo.SortRecords()
 
-                // generate checkSum to result queue
+                    // generate checkSum to result queue
+                    traceInfo.GenCheckSumToQueue(traceID, resultQueue)
+                }
+                defer resultQueueLocker.Unlock()
             }
             <-bufferChan
 
@@ -88,10 +92,10 @@ func getWrongTraceInfo(URL string, batchNo int, traceID string) {
 }
 
 func pushReusltWorkingQueue(traceInfo common.RecordTemplate, traceID string) {
-    common.CQLocker.Lock()
+    resultQueueLocker.Lock()
     if resultWorkingQueue[traceID] != nil {
         traceInfo.Records = append(resultWorkingQueue[traceID].Records, traceInfo.Records...)
     }
     resultWorkingQueue[traceID] = &traceInfo
-    defer common.CQLocker.Unlock()
+    defer resultQueueLocker.Unlock()
 }

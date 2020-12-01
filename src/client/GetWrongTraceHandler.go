@@ -31,6 +31,5 @@ func GetWrongTraceHandler(c *fiber.Ctx) error {
     }
     common.CQLocker.Unlock()
 
-
 	return c.JSON(data)
 }

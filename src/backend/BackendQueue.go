@@ -6,6 +6,7 @@ import(
 )
 
 var resultWorkingQueue = make(map[string]*common.RecordTemplate)
+var resultQueue = make(map[string]string)
 
 var backendChan = make(chan string)
 
@@ -16,3 +17,4 @@ type traceInfoStruct struct {
 
 var bufferChan = make(chan string, 15)
 var wg sync.WaitGroup
+var resultQueueLocker = sync.Mutex{}

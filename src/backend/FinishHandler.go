@@ -2,6 +2,7 @@ package backend
 
 import (
     "fmt"
+    "time"
     "github.com/gofiber/fiber/v2"
 )
 
@@ -30,11 +31,10 @@ func FinishHandler(c *fiber.Ctx) error {
     // if len(clientPorts) == 2 {
     if len(clientPorts) == 1 {
         fmt.Println("============= Result ================")
-        for key, value := range resultWorkingQueue {
-            fmt.Println("XXXXXXXXXXXXX ", key, " XXXXXXXXXXXXX")
-            fmt.Println(value)
+        for key, value := range resultQueue {
+            fmt.Println("XXXXXXXXXXXXX ", key, ": --------- ", value)
         }
-        fmt.Println("============= END ================")
+        fmt.Println("============= END ================", time.Now())
 
         msg = "OK! Start Upload now"
     }

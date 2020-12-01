@@ -72,5 +72,11 @@ func(data *RecordTemplate) SortRecords(){
     CQLocker.Unlock()
 }
 
+// GenCheckSumToQueue is using for generate the ckSum
+func(data *RecordTemplate) GenCheckSumToQueue(traceID string, result map[string]string) {
+    checkSumString := strings.Join(data.Records, "\n") + "\n"
+    result[traceID] = MD5(checkSumString)
+}
+
 // CQLocker is a CacheQueue Locker
 var CQLocker = sync.Mutex{}
