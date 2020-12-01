@@ -6,6 +6,7 @@ import (
     "log"
     "net/http"
     "strconv"
+    "sync"
     "tail-based-sampling/src/common"
 
     "github.com/gofiber/fiber/v2"
@@ -44,8 +45,22 @@ func processing(batchNo int, records []string) {
         go func(traceID string) {
             defer wg.Done()
             bufferChan <- traceID
+            var wgHostData sync.WaitGroup
             for _, url := range clientHosts {
-                go getWrongTraceInfo(url + "/getWrongTrace", batchNo, traceID)
+                wgHostData.Add(1)
+                go func(url string, batchNo int, traceID string){
+                    defer wgHostData.Done()
+                    getWrongTraceInfo(url + "/getWrongTrace", batchNo, traceID)
+                }(url, batchNo, traceID)
+                // Ensure all the clients return data back
+                wgHostData.Wait()
+
+                // sort
+                if resultWorkingQueue[traceID] != nil {
+                    resultWorkingQueue[traceID].SortRecords()
+                }
+
+                // generate checkSum to result queue
             }
             <-bufferChan
 
@@ -68,7 +83,7 @@ func getWrongTraceInfo(URL string, batchNo int, traceID string) {
 
     // Push into the result working queue
     if len(traceInfo.Records) > 0 {
-        go pushReusltWorkingQueue(traceInfo, traceID)
+        pushReusltWorkingQueue(traceInfo, traceID)
     }
 }
 
@@ -78,5 +93,5 @@ func pushReusltWorkingQueue(traceInfo common.RecordTemplate, traceID string) {
         traceInfo.Records = append(resultWorkingQueue[traceID].Records, traceInfo.Records...)
     }
     resultWorkingQueue[traceID] = &traceInfo
-    common.CQLocker.Unlock()
+    defer common.CQLocker.Unlock()
 }

@@ -1,7 +1,9 @@
 package common
 
 import (
-	"sync"
+    "strconv"
+    "strings"
+    "sync"
 )
 
 // RecordTemplate is a template for record down each line of trace record info
@@ -47,6 +49,27 @@ var PostTraceChan = make(chan string)
 // UpdateRecord is using for updating the record in CacheQueue
 func(data *RecordTemplate) UpdateRecord(record string) {
     data.Records = append(data.Records, record)
+}
+
+// SortRecords is sorting the records field
+func(data *RecordTemplate) SortRecords(){
+    CQLocker.Lock()
+    // bubbleSort
+    len := len(data.Records)
+
+    for i := 0; i < len - 1; i++ {
+        for j := 0; j < len - 1 - i; j++ {
+            arrJ, _:= strconv.Atoi(strings.Split(data.Records[j], "|")[1])
+            arrJ1, _ := strconv.Atoi(strings.Split(data.Records[j+1], "|")[1])
+
+            if(arrJ > arrJ1) {
+                temp := data.Records[j+1];
+                data.Records[j+1] = data.Records[j];
+                data.Records[j] = temp;
+            }
+        }
+    }
+    CQLocker.Unlock()
 }
 
 // CQLocker is a CacheQueue Locker

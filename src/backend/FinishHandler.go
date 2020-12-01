@@ -30,8 +30,9 @@ func FinishHandler(c *fiber.Ctx) error {
     // if len(clientPorts) == 2 {
     if len(clientPorts) == 1 {
         fmt.Println("============= Result ================")
-        for key, _ := range resultWorkingQueue {
-            fmt.Println(key)
+        for key, value := range resultWorkingQueue {
+            fmt.Println("XXXXXXXXXXXXX ", key, " XXXXXXXXXXXXX")
+            fmt.Println(value)
         }
         fmt.Println("============= END ================")
 
