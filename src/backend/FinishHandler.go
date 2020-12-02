@@ -29,6 +29,7 @@ func FinishHandler(c *fiber.Ctx) error {
     // TODO
     // if len(clientPorts) == 2 {
     if len(clientPorts) == 1 {
+        go sendCheckSum(resultQueue)
         go func(){
             fmt.Println("============= Result ================")
             // wg.Wait()
