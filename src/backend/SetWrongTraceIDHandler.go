@@ -27,7 +27,6 @@ func SetWrongTraceIDHandler(c *fiber.Ctx) error {
             "message": "Cannot parse Body JSON",
         })
     }
-    wg.Wait()
     go processing(body.BatchNo, body.Records)
 
     return c.SendString("OK!")
@@ -42,33 +41,30 @@ func processing(batchNo int, records []string) {
     for _, traceID := range records {
         wg.Add(1)
 
-        go func(traceID string) {
-            defer wg.Done()
-            bufferChan <- traceID
+        go func(traceID string, wg1 *sync.WaitGroup) {
             var wgHostData sync.WaitGroup
             for _, url := range clientHosts {
                 wgHostData.Add(1)
-                go func(url string, batchNo int, traceID string){
-                    defer wgHostData.Done()
+                go func(url string, batchNo int, traceID string, wgHostData1 *sync.WaitGroup){
+                    defer wgHostData1.Done()
                     getWrongTraceInfo(url + "/getWrongTrace", batchNo, traceID)
-                }(url, batchNo, traceID)
+                }(url, batchNo, traceID, &wgHostData)
                 // Ensure all the clients return data back
                 wgHostData.Wait()
 
-                // sort
-                resultQueueLocker.Lock()
-                traceInfo := resultWorkingQueue[traceID]
-                if traceInfo != nil {
-                    traceInfo.SortRecords()
+                traceInfoCache := common.GetTraceInfo(traceID)
+                if traceInfoCache != nil {
+                    // sort
+                    traceInfoCache.SortRecords()
 
                     // generate checkSum to result queue
-                    traceInfo.GenCheckSumToQueue(traceID, resultQueue)
+                    resultQueueLocker.Lock()
+                    traceInfoCache.GenCheckSumToQueue(traceID, resultQueue)
+                    defer resultQueueLocker.Unlock()
                 }
-                defer resultQueueLocker.Unlock()
             }
-            <-bufferChan
-
-        }(traceID)
+            defer wg1.Done()
+        }(traceID, &wg)
     }
 }
 
@@ -85,17 +81,12 @@ func getWrongTraceInfo(URL string, batchNo int, traceID string) {
         log.Fatalln(err)
     }
 
-    // Push into the result working queue
+    // Push into the cache server
     if len(traceInfo.Records) > 0 {
-        pushReusltWorkingQueue(traceInfo, traceID)
+        traceInfoCache := common.GetTraceInfo(traceID)
+        if traceInfoCache != nil {
+            traceInfo.Records = append(traceInfoCache.Records, traceInfo.Records...)
+        }
+        common.SetTraceInfo(traceID, traceInfoCache)
     }
-}
-
-func pushReusltWorkingQueue(traceInfo common.RecordTemplate, traceID string) {
-    resultQueueLocker.Lock()
-    if resultWorkingQueue[traceID] != nil {
-        traceInfo.Records = append(resultWorkingQueue[traceID].Records, traceInfo.Records...)
-    }
-    resultWorkingQueue[traceID] = &traceInfo
-    defer resultQueueLocker.Unlock()
 }

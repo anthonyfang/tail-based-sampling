@@ -1,17 +1,21 @@
 package common
 
 import (
-	"bufio"
-	"bytes"
-	"encoding/json"
-	"fmt"
-	"log"
-	"net/http"
-	"os"
-	"strings"
+    "bufio"
+    "bytes"
+    "encoding/json"
+    "fmt"
+    // "io"
+    "log"
+    "net/http"
+    "os"
+    "strings"
     "time"
+    // "sync"
+    // "math"
+    "strconv"
 
-	"github.com/gofiber/fiber/v2"
+    "github.com/gofiber/fiber/v2"
 )
 
 var isRunning = false
@@ -77,18 +81,19 @@ func fetchData(url string){
         batchNo := 0
         for scanner.Scan() {
             recordString := scanner.Text()
-            go pushToCacheQueue(recordString, batchNo)
+            go pushToCacheServer(recordString, batchNo)
 
             // tigger time window
             if i % 20000 == 0 {
                 wg.Add(1)
                 go func(batchNo int) {
-                    <-cacheQueueChan
-                    BackupCacheQueue()
+                    <-cacheChan
+                    // BackupCacheQueue()
                     postTraceIDs(batchNo)
-                    defer wg.Done()
+                    wg.Done()
                 }(batchNo)
 
+                fmt.Println("batchNo: ", batchNo)
                 batchNo++
             }
             i++
@@ -105,7 +110,7 @@ func getURL(port string) string {
     var url string
     switch currentServerPort := GetEnvDefault("SERVER_PORT", ""); currentServerPort {
     case "8000":
-        url = fmt.Sprintf("http://localhost:%v/trace2-small.data", port)
+        url = fmt.Sprintf("http://localhost:%v/trace1-small.data", port)
     case "8001":
         url = fmt.Sprintf("http://localhost:%v/trace2-small.data", port)
     default:
@@ -115,8 +120,7 @@ func getURL(port string) string {
     return url
 }
 
-func pushToCacheQueue(recordString string, batchNo int) {
-    CQLocker.Lock()
+func pushToCacheServer(recordString string, batchNo int) {
     record := strings.Split(recordString, "|")
     traceID := record[0]
 
@@ -124,21 +128,28 @@ func pushToCacheQueue(recordString string, batchNo int) {
     hasError := false
     if len(record) > 8 {
         hasError = isErrorRecord(record[8])
+
+        // add the line to cache server
+        traceCacheInfo := CacheServer.Get(traceID)
+        data := &RecordTemplate{hasError, batchNo, []string{}}
+        if traceCacheInfo != nil {
+            traceInfo := traceCacheInfo.(*RecordTemplate)
+            newHasError := traceInfo.HasError
+            if !newHasError {
+                newHasError = hasError
+            }
+            data = &RecordTemplate{newHasError, batchNo, traceInfo.Records}
+        }
+        data.UpdateRecord(recordString)
+        SetTraceInfo(traceID, data)
+
+        // add to the bad trace list
+        if hasError {
+            BadTraceIDList = append(BadTraceIDList, traceID)
+        }
     }
 
-    // add the line to cacheQueue
-    data := &RecordTemplate{hasError, batchNo, []string{}}
-    if CacheQueue[traceID] != nil {
-        newHasError := CacheQueue[traceID].HasError
-        if !newHasError {
-            newHasError = hasError
-        }
-        data = &RecordTemplate{newHasError, batchNo, CacheQueue[traceID].Records}
-    }
-    data.UpdateRecord(recordString)
-    CacheQueue[traceID] = data
-    CQLocker.Unlock()
-    cacheQueueChan <- "ok"
+    cacheChan <- "ok"
 }
 
 func isErrorRecord(tags string) bool {
@@ -147,22 +158,30 @@ func isErrorRecord(tags string) bool {
 }
 
 func postTraceIDs(batchNo int) {
-    if len(BadTraceList) == 0 || BadTraceList[string(batchNo)] == nil {
-        return
-    }
+    badListLocker.Lock()
+    badTraceIDList := BadTraceIDList
+    BadTraceIDList = []string{}
+
+    go CacheServer.Set(strconv.Itoa(batchNo), badTraceIDList, 2 * time.Second)
+
     mjson, err := json.Marshal(RecordTemplate {
         BatchNo: batchNo,
-        Records: BadTraceList[string(batchNo)].Records,
+        Records: badTraceIDList,
     })
     if err != nil {
         log.Fatal(err)
     }
 
-    res, err := http.Post("http://localhost:8002/setWrongTraceId", "application/json", bytes.NewBuffer(mjson))
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer res.Body.Close()
+    badTraceIDList = []string{}
+    badListLocker.Unlock()
+
+    go func (mjson []byte)  {
+        res, err := http.Post("http://localhost:8002/setWrongTraceId", "application/json", bytes.NewBuffer(mjson))
+        if err != nil {
+            log.Fatal(err)
+        }
+        defer res.Body.Close()
+    }(mjson)
 }
 
 func postFinishSignal() {

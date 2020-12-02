@@ -15,6 +15,5 @@ type traceInfoStruct struct {
     batchNo     int;
 }
 
-var bufferChan = make(chan string, 15)
 var wg sync.WaitGroup
 var resultQueueLocker = sync.Mutex{}

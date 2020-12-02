@@ -10,7 +10,6 @@ var clientPorts = []string{}
 
 // FinishHandler is using for trigger calculation
 func FinishHandler(c *fiber.Ctx) error {
-    
     type Request struct {
         Port string         `json:"port"`;
     }
@@ -30,12 +29,14 @@ func FinishHandler(c *fiber.Ctx) error {
     // TODO
     // if len(clientPorts) == 2 {
     if len(clientPorts) == 1 {
-        fmt.Println("============= Result ================")
-        for key, value := range resultQueue {
-            fmt.Println("XXXXXXXXXXXXX ", key, ": --------- ", value)
-        }
-        fmt.Println("============= END ================", time.Now())
-
+        go func(){
+            fmt.Println("============= Result ================")
+            // wg.Wait()
+            for key, value := range resultQueue {
+                fmt.Println("XXXXXXXXXXXXX ", key, ": --------- ", value)
+            }
+            fmt.Println("============= END ================", time.Now())
+        }()
         msg = "OK! Start Upload now"
     }
     return c.SendString(msg)

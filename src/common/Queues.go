@@ -1,9 +1,13 @@
 package common
 
 import (
-    "strconv"
-    "strings"
-    "sync"
+	// "fmt"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"tail-based-sampling/src/cache"
 )
 
 // RecordTemplate is a template for record down each line of trace record info
@@ -13,47 +17,30 @@ type RecordTemplate struct {
     Records       []string
 }
 
-// CacheQueue is using cache all the records
-var CacheQueue = make(map[string]*RecordTemplate)
-var CacheQueueBk = make(map[string]*RecordTemplate)
-var BadTraceList = make(map[string]*RecordTemplate)
+// CacheServer is using cache the records
+var CacheServer = cache.NewCache(0, 2 * time.Second)
 
-var badListChan = make(chan string, 1)
-var cacheQueueChan = make(chan string, 1)
+// BadTraceIDList is recording down the bad trace IDs
+var BadTraceIDList = []string{}
+var badListLocker = sync.Mutex{}
+
 var wg sync.WaitGroup
 
+// BadTraceList is a list record down the bad trace
+var BadTraceList = make(map[string]*RecordTemplate)
 
-// BackupCacheQueue is moving the cache queue to bk queue
-func BackupCacheQueue() {
-    CQLocker.Lock()
-    CacheQueueBk = CacheQueue
-    CacheQueue = make(map[string]*RecordTemplate)
-    BadTraceList = make(map[string]*RecordTemplate)
-
-    for key, record := range CacheQueueBk {
-        if record.HasError {
-            data := &RecordTemplate{record.HasError, record.BatchNo, []string{}}
-            if BadTraceList[string(record.BatchNo)] != nil {
-                data = &RecordTemplate{record.HasError, record.BatchNo, BadTraceList[string(record.BatchNo)].Records}
-            }
-            data.UpdateRecord(key)
-            BadTraceList[string(record.BatchNo)] = data
-        }
-    }
-    CQLocker.Unlock()
-}
+var cacheChan = make(chan string, 1)
 
 // PostTraceChan is a channel for sending/receiving the signal 
 var PostTraceChan = make(chan string)
 
-// UpdateRecord is using for updating the record in CacheQueue
+// UpdateRecord is using for updating the record in cache
 func(data *RecordTemplate) UpdateRecord(record string) {
     data.Records = append(data.Records, record)
 }
 
 // SortRecords is sorting the records field
 func(data *RecordTemplate) SortRecords(){
-    CQLocker.Lock()
     // bubbleSort
     len := len(data.Records)
 
@@ -69,7 +56,6 @@ func(data *RecordTemplate) SortRecords(){
             }
         }
     }
-    CQLocker.Unlock()
 }
 
 // GenCheckSumToQueue is using for generate the ckSum
@@ -78,5 +64,17 @@ func(data *RecordTemplate) GenCheckSumToQueue(traceID string, result map[string]
     result[traceID] = MD5(checkSumString)
 }
 
-// CQLocker is a CacheQueue Locker
-var CQLocker = sync.Mutex{}
+// GetTraceInfo is getting the traceInfo
+func GetTraceInfo(traceID string) *RecordTemplate {
+    traceCacheInfo := CacheServer.Get(traceID)
+    traceInfo := &RecordTemplate{}
+    if traceCacheInfo != nil {
+        traceInfo = traceCacheInfo.(*RecordTemplate)
+    }
+    return traceInfo
+}
+
+// SetTraceInfo is setting the traceInfo
+func SetTraceInfo(traceID string, data *RecordTemplate) {
+    CacheServer.Set(traceID, data, 2 * time.Second)
+}
