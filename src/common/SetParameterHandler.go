@@ -87,10 +87,9 @@ func fetchData(url string){
             if i % 20000 == 0 {
                 wg.Add(1)
                 go func(batchNo int) {
-                    <-cacheChan
-                    // BackupCacheQueue()
+                    // <-cacheChan
+                    defer wg.Done()
                     postTraceIDs(batchNo)
-                    wg.Done()
                 }(batchNo)
 
                 fmt.Println("batchNo: ", batchNo)
@@ -143,13 +142,11 @@ func pushToCacheServer(recordString string, batchNo int) {
         data.UpdateRecord(recordString)
         SetTraceInfo(traceID, data)
 
-        // add to the bad trace list
         if hasError {
-            BadTraceIDList = append(BadTraceIDList, traceID)
+            go func(){ BadTraceIDList = append(BadTraceIDList, traceID) }()
         }
     }
-
-    cacheChan <- "ok"
+    // cacheChan <- "ok"
 }
 
 func isErrorRecord(tags string) bool {

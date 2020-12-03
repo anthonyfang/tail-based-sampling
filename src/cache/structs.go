@@ -18,8 +18,9 @@ const (
 
 // Cache is the cache entity structure 
 type Cache struct {
-    items               map[string]Item
-    mu                  sync.RWMutex
+    // items               map[string]Item
+    // mu                  sync.RWMutex
+    items               sync.Map
     defaultExpiration   time.Duration
     gcInterval          time.Duration
     stopGc              chan bool

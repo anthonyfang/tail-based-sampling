@@ -1,7 +1,7 @@
 package cache
 
 import (
-	"fmt"
+    "sync"
 	"time"
 )
 
@@ -16,8 +16,7 @@ func (cache *Cache) gcLoop() {
     for {
         select {
         case <-ticker.C:
-            fmt.Println("----------- GC START ----------: ", len(cache.items))
-            cache.Flush()
+            cache.DeleteExpired()
         case <-cache.stopGc:
             ticker.Stop()
             return
@@ -26,7 +25,7 @@ func (cache *Cache) gcLoop() {
 }
 
 func (cache *Cache) delete(key string) {
-    delete(cache.items, key)
+    cache.items.Delete(key)
 }
 
 /*
@@ -55,27 +54,25 @@ func (item Item) Expired() bool {
 
 // Delete is using for delete a cache record
 func (cache *Cache) Delete(k string) {
-    cache.mu.Lock()
     cache.delete(k)
-    defer cache.mu.Unlock()
 }
 
 // DeleteExpired is using for deleting the expired records
 func (cache *Cache) DeleteExpired() {
     now := time.Now().UnixNano()
-    cache.mu.Lock()
-    for key, value := range cache.items {
-        if value.Expiration > 0 && now > value.Expiration {
-            cache.delete(key)
+    cache.items.Range(func(key interface{}, value interface{}) bool {
+        value1 := value.(Item)
+        if value1.Expiration > 0 && now > value1.Expiration {
+            cache.items.Delete(key)
         }
-    }
-    defer cache.mu.Unlock()
+        return true
+    })
 }
 
 // NewCache is using for creating a new cache entity
 func NewCache(defaultExpiration, gcInterval time.Duration) *Cache {
     cache := &Cache{
-        items:                  map[string]Item{},
+        items:                  sync.Map{},
         defaultExpiration:      defaultExpiration,
         gcInterval:             gcInterval,
         stopGc:                 make(chan bool),
@@ -94,33 +91,28 @@ func (cache *Cache) Set(key string, value interface{}, duration time.Duration) {
     if duration > 0 {
         expiration = time.Now().Add(duration).UnixNano()
     }
-    cache.mu.Lock()
-    cache.items[key] = Item{
+    cache.items.Store(key, Item{
         Object:     value,
         Expiration: expiration,
-    }
-    defer cache.mu.Unlock()
+    })
 }
 
 // Get is for getting data
 func (cache *Cache) Get(key string) (interface{}) {
-
-    cache.mu.RLock()
-    item, found := cache.items[key]
+    value, found := cache.items.Load(key)
     if !found {
-        defer cache.mu.RUnlock()
         return nil
     }
+    item := value.(Item)
     if item.Expired() {
         return nil
     }
-    defer cache.mu.RUnlock()
     return item.Object
 }
 
-// Flush is empty cache
-func (cache *Cache) Flush() {
-    cache.mu.Lock()
-    defer cache.mu.Unlock()
-    cache.items = map[string]Item{}
-}
+// // Flush is empty cache
+// func (cache *Cache) Flush() {
+//     cache.mu.Lock()
+//     defer cache.mu.Unlock()
+//     cache.items = map[string]Item{}
+// }
