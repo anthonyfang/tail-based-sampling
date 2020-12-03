@@ -18,7 +18,7 @@ func GetWrongTraceHandler(c *fiber.Ctx) error {
     if traceInfo != nil {
         data = traceInfo
     }
-    // go common.CacheServer.Delete(traceID)
+    common.CacheQueue.Delete(traceID)
 
 	return c.JSON(data)
 }

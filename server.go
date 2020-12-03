@@ -26,7 +26,6 @@ func main() {
     app.Get("/setParameter", Common.SetParameterGetHandler)
 
     if port == "8002" {
-        go Common.CacheServer.StopGc()
         app.Post("/setWrongTraceId", BackendHandler.SetWrongTraceIDHandler)
         app.Post("/finish", BackendHandler.FinishHandler)
     } else {

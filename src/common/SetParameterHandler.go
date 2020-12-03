@@ -81,7 +81,7 @@ func fetchData(url string){
         batchNo := 0
         for scanner.Scan() {
             recordString := scanner.Text()
-            go pushToCacheServer(recordString, batchNo)
+            go pushToCache(recordString, batchNo)
 
             // tigger time window
             if i % 20000 == 0 {
@@ -119,7 +119,7 @@ func getURL(port string) string {
     return url
 }
 
-func pushToCacheServer(recordString string, batchNo int) {
+func pushToCache(recordString string, batchNo int) {
     record := strings.Split(recordString, "|")
     traceID := record[0]
 
@@ -129,7 +129,7 @@ func pushToCacheServer(recordString string, batchNo int) {
         hasError = isErrorRecord(record[8])
 
         // add the line to cache server
-        traceCacheInfo := CacheServer.Get(traceID)
+        traceCacheInfo, _ := CacheQueue.Load(traceID)
         data := &RecordTemplate{hasError, batchNo, []string{}}
         if traceCacheInfo != nil {
             traceInfo := traceCacheInfo.(*RecordTemplate)
@@ -159,7 +159,7 @@ func postTraceIDs(batchNo int) {
     badTraceIDList := BadTraceIDList
     BadTraceIDList = []string{}
 
-    go CacheServer.Set(strconv.Itoa(batchNo), badTraceIDList, 2 * time.Second)
+    CacheQueue.Store(strconv.Itoa(batchNo), badTraceIDList)
 
     mjson, err := json.Marshal(RecordTemplate {
         BatchNo: batchNo,

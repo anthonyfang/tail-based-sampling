@@ -1,13 +1,9 @@
 package common
 
 import (
-	// "fmt"
 	"strconv"
 	"strings"
 	"sync"
-	"time"
-
-	"tail-based-sampling/src/cache"
 )
 
 // RecordTemplate is a template for record down each line of trace record info
@@ -17,8 +13,8 @@ type RecordTemplate struct {
     Records       []string
 }
 
-// CacheServer is using cache the records
-var CacheServer = cache.NewCache(0, 2 * time.Second)
+// CacheQueue is to store the records
+var CacheQueue = sync.Map{}
 
 // BadTraceIDList is recording down the bad trace IDs
 var BadTraceIDList = []string{}
@@ -66,7 +62,7 @@ func(data *RecordTemplate) GenCheckSumToQueue(traceID string, result map[string]
 
 // GetTraceInfo is getting the traceInfo
 func GetTraceInfo(traceID string) *RecordTemplate {
-    traceCacheInfo := CacheServer.Get(traceID)
+    traceCacheInfo, _ := CacheQueue.Load(traceID)
     traceInfo := &RecordTemplate{}
     if traceCacheInfo != nil {
         traceInfo = traceCacheInfo.(*RecordTemplate)
@@ -76,5 +72,5 @@ func GetTraceInfo(traceID string) *RecordTemplate {
 
 // SetTraceInfo is setting the traceInfo
 func SetTraceInfo(traceID string, data *RecordTemplate) {
-    CacheServer.Set(traceID, data, 2 * time.Second)
+    CacheQueue.Store(traceID, data)
 }
