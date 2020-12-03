@@ -1,19 +1,20 @@
 FROM golang:alpine as builder-base
 
-# RUN echo http://mirror.yandex.ru/mirrors/alpine/v3.12/main > /etc/apk/repositories; \
-#     echo http://mirror.yandex.ru/mirrors/alpine/v3.12/community >> /etc/apk/repositories
+RUN echo http://mirror.yandex.ru/mirrors/alpine/v3.12/main > /etc/apk/repositories; \
+    echo http://mirror.yandex.ru/mirrors/alpine/v3.12/community >> /etc/apk/repositories
 
 RUN echo http://mirrors.ustc.edu.cn/alpine/v3.12/main > /etc/apk/repositories; \
     echo http://mirrors.ustc.edu.cn/alpine/v3.12/community >> /etc/apk/repositories
 
-RUN echo "ipv6" >> /etc/modules && \
-    apk update && \
+RUN apk update && \
     apk add --no-cache bash
 
 FROM builder-base
 WORKDIR /tail-based-sampling
 RUN go mod init tail-based-sampling && \
-    go get github.com/gofiber/fiber/v2
+    go get github.com/gofiber/fiber/v2 && \
+    go env -w GO111MODULE=on && \
+    go env -w GOPROXY=https://goproxy.cn,direct
 
 ADD . /tail-based-sampling
 

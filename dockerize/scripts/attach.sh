@@ -1,3 +1,3 @@
 #！ /bin/bash
-container_name=$1
+container_name=$NAME
 docker attach $(docker ps -f "name=$container_name" -q)

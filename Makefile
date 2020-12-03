@@ -17,4 +17,4 @@ start-scoring:
 	sh ./dockerize/scripts/start-scoring.sh
 
 attach:
-	sh ./dockerize/scripts/attach.sh $1
+	sh ./dockerize/scripts/attach.sh

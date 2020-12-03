@@ -6,10 +6,11 @@ WORKDIR /tail-based-sampling
 #     echo http://mirror.yandex.ru/mirrors/alpine/v3.12/community >> /etc/apk/repositories
 
 RUN echo http://mirrors.ustc.edu.cn/alpine/v3.12/main > /etc/apk/repositories; \
-    echo http://mirrors.ustc.edu.cn/alpine/v3.12/community >> /etc/apk/repositories
+    echo http://mirrors.ustc.edu.cn/alpine/v3.12/community >> /etc/apk/repositories; \
+    go env -w GO111MODULE=on; \
+    go env -w GOPROXY=https://goproxy.cn,direct
 
-RUN echo "ipv6" >> /etc/modules && \
-    apk update && \
+RUN apk update && \
     apk add --no-cache bash git curl && \
     go mod init tail-based-sampling && \
     go get github.com/gofiber/fiber/v2
