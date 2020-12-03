@@ -1,7 +1,10 @@
 FROM golang:alpine as builder-base
 
-RUN echo http://mirror.yandex.ru/mirrors/alpine/v3.12/main > /etc/apk/repositories; \
-    echo http://mirror.yandex.ru/mirrors/alpine/v3.12/community >> /etc/apk/repositories
+# RUN echo http://mirror.yandex.ru/mirrors/alpine/v3.12/main > /etc/apk/repositories; \
+#     echo http://mirror.yandex.ru/mirrors/alpine/v3.12/community >> /etc/apk/repositories
+
+RUN echo http://mirrors.ustc.edu.cn/alpine/v3.12/main > /etc/apk/repositories; \
+    echo http://mirrors.ustc.edu.cn/alpine/v3.12/community >> /etc/apk/repositories
 
 RUN echo "ipv6" >> /etc/modules && \
     apk update && \

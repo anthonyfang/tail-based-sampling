@@ -110,9 +110,9 @@ func getURL(port string) string {
     var url string
     switch currentServerPort := GetEnvDefault("SERVER_PORT", ""); currentServerPort {
     case "8000":
-        url = fmt.Sprintf("http://localhost:%v/trace1-small.data", port)
+        url = fmt.Sprintf("http://localhost:%v/trace1.data", port)
     case "8001":
-        url = fmt.Sprintf("http://localhost:%v/trace2-small.data", port)
+        url = fmt.Sprintf("http://localhost:%v/trace2.data", port)
     default:
         url = ""
     }

@@ -2,6 +2,9 @@ FROM node:15-alpine
 
 WORKDIR /app
 
+RUN echo http://mirrors.ustc.edu.cn/alpine/v3.12/main > /etc/apk/repositories; \
+    echo http://mirrors.ustc.edu.cn/alpine/v3.12/community >> /etc/apk/repositories
+
 RUN apk update && apk add --no-cache bash
 RUN npm install http-server && mkdir -p data
 
