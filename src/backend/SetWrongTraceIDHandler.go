@@ -84,9 +84,9 @@ func getWrongTraceInfo(URL string, batchNo int, traceID string) {
     // Push into the cache server
     if len(traceInfo.Records) > 0 {
         traceInfoCache := common.GetTraceInfo(traceID)
-        if traceInfoCache != nil {
+        if traceInfoCache != nil && len(traceInfoCache.Records) > 0 {
             traceInfo.Records = append(traceInfoCache.Records, traceInfo.Records...)
         }
-        common.SetTraceInfo(traceID, traceInfoCache)
+        common.SetTraceInfo(traceID, &traceInfo)
     }
 }
