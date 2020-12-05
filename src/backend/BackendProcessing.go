@@ -38,7 +38,7 @@ func processing() {
 			// Request all the clients to get all the bad trace info
 			BackendTraceIDQueue.Range(func(k, v interface{}) bool {
 				traceID := k.(string)
-				fmt.Println("xxx ", traceID)
+				// fmt.Println("xxx ", traceID)
 				//go func(traceID string) {
 				var wgHostData sync.WaitGroup
 				for _, url := range clientHosts {

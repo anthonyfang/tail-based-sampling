@@ -50,19 +50,25 @@ func SetParameterPostHandler(c *fiber.Ctx) error {
 	}
 	os.Setenv("UPLOAD_SERVER_PORT", body.Port)
 
+	return c.SendString(fmt.Sprintf("Please use Get Request! Upload server port is: %v", body.Port))
+}
+
+// SetParameterGetHandler is use for handling the SetParameterHandler endpoint
+func SetParameterGetHandler(c *fiber.Ctx) error {
+	port := c.Query("port")
+
+	os.Setenv("UPLOAD_SERVER_PORT", port)
 	serverPort := GetEnvDefault("SERVER_PORT", "8002")
 
 	if serverPort != "8002" && !isRunning {
 		isRunning = true
-		url := getURL(body.Port)
+		url := getURL(port)
 		go fetchData(url)
 
-		// var timeWindowWg sync.WaitGroup
 		// tigger time window
 		go func() {
 			for val := range TimeChan {
 				rollOver := false
-
 				if timeWindowStart == 0 {
 					timeWindowStart = val
 					timeWindowClose = timeWindowStart + int64(timeWindow*1000000)
@@ -76,35 +82,13 @@ func SetParameterPostHandler(c *fiber.Ctx) error {
 
 				if rollOver {
 					fmt.Println("triggered send IDs, current count: ", counter)
-					// <-cacheChan
 					postTraceIDs(int(batchNo))
-					fmt.Println("batchNo: ", batchNo)
-
+					// fmt.Println("batchNo: ", batchNo)
 					atomic.AddInt32(&batchNo, 1)
-					// wg.Wait()
-					// batchNo++
 				}
+				// time.Sleep(2 * time.Second)
 			}
-			// i++
 		}()
-	}
-
-	return c.SendString(fmt.Sprintf("OK! Upload server port is: %v", body.Port))
-}
-
-// SetParameterGetHandler is use for handling the SetParameterHandler endpoint
-func SetParameterGetHandler(c *fiber.Ctx) error {
-	port := c.Query("port")
-
-	os.Setenv("UPLOAD_SERVER_PORT", port)
-
-	serverPort := GetEnvDefault("SERVER_PORT", "8002")
-
-	if serverPort != "8002" {
-		url := getURL(port)
-		go fetchData(url)
-	} else {
-
 	}
 
 	return c.SendString(fmt.Sprintf("OK! Upload server port is: %v", port))
@@ -127,14 +111,14 @@ func fetchData(url string) {
 
 		var httpWg sync.WaitGroup
 		for scanner.Scan() {
-
 			recordString := scanner.Text()
 			httpWg.Add(1)
 			go pushToCache(recordString, int(batchNo), &httpWg)
+			// time.Sleep(2 * time.Second)
 		}
 		httpWg.Wait()
 		close(TimeChan)
-		// fmt.Println("xxxxxxxxxxxxxxxxxx: ", i)
+
 		fmt.Println("xxxxxxxxxxxxxxxxxx: pushed ", counter)
 		go postFinishSignal()
 	}
@@ -154,20 +138,6 @@ func getURL(port string) string {
 	}
 
 	return url
-}
-
-func Count(lock *sync.Mutex) {
-	lock.Lock()
-	counter++
-	// fmt.Println(counter)
-	lock.Unlock()
-}
-
-func BatchIncr(lock *sync.Mutex) {
-	lock.Lock()
-	batchNo++
-	// fmt.Println(counter)
-	lock.Unlock()
 }
 
 func pushToCache(recordString string, batchNo int, httpWg *sync.WaitGroup) {
@@ -195,7 +165,6 @@ func pushToCache(recordString string, batchNo int, httpWg *sync.WaitGroup) {
 		}
 
 		data.UpdateRecord(recordString)
-
 		// if traceID == "c074d0a90cd607b" {
 		// 	fmt.Println("Set Trace: ", data)
 		// }
@@ -207,7 +176,6 @@ func pushToCache(recordString string, batchNo int, httpWg *sync.WaitGroup) {
 			go func() { BadTraceIDList = append(BadTraceIDList, traceID) }()
 		}
 	}
-	// cacheChan <- "ok"
 }
 
 func isErrorRecord(tags string) bool {

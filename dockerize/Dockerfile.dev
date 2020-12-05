@@ -1,18 +1,21 @@
 FROM golang:alpine
 
 WORKDIR /tail-based-sampling
-
+# ENV ALL_PROXY http://172.217.27.145:1080
 # RUN echo http://mirror.yandex.ru/mirrors/alpine/v3.12/main > /etc/apk/repositories; \
 #     echo http://mirror.yandex.ru/mirrors/alpine/v3.12/community >> /etc/apk/repositories
 
 RUN echo http://mirrors.ustc.edu.cn/alpine/v3.12/main > /etc/apk/repositories; \
-    echo http://mirrors.ustc.edu.cn/alpine/v3.12/community >> /etc/apk/repositories; \
-    go env -w GO111MODULE=on; \
-    go env -w GOPROXY=https://goproxy.cn,direct
+    echo http://mirrors.ustc.edu.cn/alpine/v3.12/community >> /etc/apk/repositories;
+
+RUN cat /etc/resolv.conf && \
+    go mod init tail-based-sampling
 
 RUN apk update && \
     apk add --no-cache bash git curl && \
-    go mod init tail-based-sampling && \
+    ifconfig && \
+    export GO111MODULE=on && \
+    export GOPROXY=https://goproxy.cn && \
     go get github.com/gofiber/fiber/v2
 
 CMD ["bash"]
