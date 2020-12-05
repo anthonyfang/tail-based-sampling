@@ -19,5 +19,5 @@ start-scoring:
 attach:
 	sh ./dockerize/scripts/attach.sh
 
-push-ali: build-bin
+push-ali:
 	sh ./dockerize/scripts/push-ali.sh

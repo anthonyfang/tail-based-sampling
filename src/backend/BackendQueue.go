@@ -17,3 +17,12 @@ type traceInfoStruct struct {
 
 var wg sync.WaitGroup
 var resultQueueLocker = sync.Mutex{}
+
+func contains(s []string, e string) bool {
+    for _, a := range s {
+        if a == e {
+            return true
+        }
+    }
+    return false
+}

@@ -10,7 +10,8 @@ import (
 type RecordTemplate struct {
     HasError      bool;
     BatchNo       int;
-    Records       []string
+    Records       []string;
+    Port          string
 }
 
 // CacheQueue is to store the records
@@ -25,7 +26,7 @@ var wg sync.WaitGroup
 // BadTraceList is a list record down the bad trace
 var BadTraceList = make(map[string]*RecordTemplate)
 
-var cacheChan = make(chan string, 1)
+var cacheChan = make(chan string, 10)
 
 // PostTraceChan is a channel for sending/receiving the signal 
 var PostTraceChan = make(chan string)

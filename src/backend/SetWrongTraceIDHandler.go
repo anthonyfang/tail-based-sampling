@@ -32,44 +32,25 @@ func SetWrongTraceIDHandler(c *fiber.Ctx) error {
     return c.SendString("OK!")
 }
 
-func unique(arr []string) []string {
-    occured := map[string]bool{}
-    result := []string{}
-    for e := range arr {
-
-        // check if already the mapped
-        // variable is set to true or not
-        if occured[arr[e]] != true {
-            occured[arr[e]] = true
-
-            // Append to result slice.
-            result = append(result, arr[e])
-        }
-    }
-
-    return result
-}
-
 // TODO
 var clientHosts = []string{"http://localhost:8000", "http://localhost:8001"}
-
 //var clientHosts = []string{"http://localhost:8000"}
 
 func processing(batchNo int, records []string) {
-
     // Request all the clients to get all the bad trace info
-    for _, traceID := range unique(records) {
-
-        go func(traceID string) {
-
+    for _, traceID := range records {
+        if contains(common.BadTraceIDList, traceID) {
+            continue
+        }
+        common.BadTraceIDList = append(common.BadTraceIDList, traceID)
+        go func(traceID string, _wg *sync.WaitGroup) {
             var wgHostData sync.WaitGroup
             for _, url := range clientHosts {
-
                 wgHostData.Add(1)
 
-                go func(url string, batchNo int, traceID string, wgHostData *sync.WaitGroup) {
+                go func(url string, batchNo int, traceID string, _wgHostData *sync.WaitGroup) {
+                    defer _wgHostData.Done()
                     getWrongTraceInfo(url+"/getWrongTrace", batchNo, traceID)
-                    wgHostData.Done()
                 }(url, batchNo, traceID, &wgHostData)
             }
             // Ensure all the clients return data back
@@ -86,8 +67,7 @@ func processing(batchNo int, records []string) {
                 traceInfoCache.GenCheckSumToQueue(traceID, resultQueue)
                 defer resultQueueLocker.Unlock()
             }
-
-        }(traceID)
+        }(traceID, &wg)
     }
 }
 
@@ -95,19 +75,11 @@ func getWrongTraceInfo(URL string, batchNo int, traceID string) {
 
     url := URL + "/" + strconv.Itoa(batchNo) + "/" + traceID
 
-    if traceID == "c074d0a90cd607b" {
-        fmt.Println(url)
-    }
-
     res, err := http.Get(url)
     if err != nil {
         log.Fatal(err)
     }
     defer res.Body.Close()
-
-    if traceID == "c074d0a90cd607b" {
-        fmt.Println(res.Body)
-    }
 
     var traceInfo common.RecordTemplate
     err = json.NewDecoder(res.Body).Decode(&traceInfo)
@@ -122,6 +94,7 @@ func getWrongTraceInfo(URL string, batchNo int, traceID string) {
         if traceInfoCache != nil && len(traceInfoCache.Records) > 0 {
             traceInfo.Records = append(traceInfoCache.Records, traceInfo.Records...)
         }
+
         common.SetTraceInfo(traceID, &traceInfo)
     }
 }

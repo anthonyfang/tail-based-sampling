@@ -1,12 +1,11 @@
 package client
 
 import (
-	// "fmt"
-	"strconv"
+    "strconv"
 
-	"github.com/gofiber/fiber/v2"
+    "github.com/gofiber/fiber/v2"
 
-	"tail-based-sampling/src/common"
+    "tail-based-sampling/src/common"
 )
 
 // GetWrongTraceHandler is use for handling the SetWrongTraceId endpoint
@@ -18,7 +17,7 @@ func GetWrongTraceHandler(c *fiber.Ctx) error {
     if traceInfo != nil {
         data = traceInfo
     }
-    common.CacheQueue.Delete(traceID)
+    // common.CacheQueue.Delete(traceID)
 
-	return c.JSON(data)
+    return c.JSON(data)
 }

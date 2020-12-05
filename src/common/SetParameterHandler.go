@@ -81,18 +81,17 @@ func fetchData(url string){
         batchNo := 0
         for scanner.Scan() {
             recordString := scanner.Text()
-            go pushToCache(recordString, batchNo)
+            pushToCache(recordString, batchNo)
 
             // tigger time window
-            if i % 20000 == 0 {
+            if i > 0 && i % 20000 == 0 {
                 wg.Add(1)
                 go func(batchNo int) {
-                    // <-cacheChan
                     defer wg.Done()
                     postTraceIDs(batchNo)
                 }(batchNo)
 
-                fmt.Println("batchNo: ", batchNo)
+                // fmt.Println("batchNo: ", batchNo)
                 batchNo++
             }
             i++
@@ -128,25 +127,24 @@ func pushToCache(recordString string, batchNo int) {
     if len(record) > 8 {
         hasError = isErrorRecord(record[8])
 
+        if hasError {
+            go func(){ BadTraceIDList = append(BadTraceIDList, traceID) }()
+        }
+
         // add the line to cache server
         traceCacheInfo, _ := CacheQueue.Load(traceID)
-        data := &RecordTemplate{hasError, batchNo, []string{}}
+        data := &RecordTemplate{hasError, batchNo, []string{}, ""}
         if traceCacheInfo != nil {
             traceInfo := traceCacheInfo.(*RecordTemplate)
             newHasError := traceInfo.HasError
             if !newHasError {
                 newHasError = hasError
             }
-            data = &RecordTemplate{newHasError, batchNo, traceInfo.Records}
+            data = &RecordTemplate{newHasError, batchNo, traceInfo.Records, GetEnvDefault("SERVER_PORT", "")}
         }
         data.UpdateRecord(recordString)
         SetTraceInfo(traceID, data)
-
-        if hasError {
-            go func(){ BadTraceIDList = append(BadTraceIDList, traceID) }()
-        }
     }
-    // cacheChan <- "ok"
 }
 
 func isErrorRecord(tags string) bool {
@@ -155,6 +153,8 @@ func isErrorRecord(tags string) bool {
 }
 
 func postTraceIDs(batchNo int) {
+    if len(BadTraceIDList) <=0 { return }
+
     badListLocker.Lock()
     badTraceIDList := BadTraceIDList
     BadTraceIDList = []string{}
@@ -164,10 +164,13 @@ func postTraceIDs(batchNo int) {
     mjson, err := json.Marshal(RecordTemplate {
         BatchNo: batchNo,
         Records: badTraceIDList,
+        Port:    GetEnvDefault("SERVER_PORT","3000"),
     })
     if err != nil {
         log.Fatal(err)
     }
+
+    // fmt.Print("================= :", batchNo, " ----------- ", badTraceIDList, "\n")
 
     badTraceIDList = []string{}
     badListLocker.Unlock()
