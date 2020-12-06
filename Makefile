@@ -12,3 +12,12 @@ run-prd: build-bin
 
 start-up-datasource:
 	sh ./dockerize/scripts/start-up-datasource.sh
+
+start-scoring:
+	sh ./dockerize/scripts/start-scoring.sh
+
+attach:
+	sh ./dockerize/scripts/attach.sh
+
+push-ali:
+	sh ./dockerize/scripts/push-ali.sh

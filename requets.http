@@ -2,6 +2,12 @@
 GET http://localhost:8000/ready HTTP/1.1
 
 ###
+GET http://localhost:8001/ready HTTP/1.1
+
+###
+GET http://localhost:8002/ready HTTP/1.1
+
+### --------------------------------------------------
 
 POST http://localhost:8000/setParameter HTTP/1.1
 content-type: application/json
@@ -11,12 +17,30 @@ content-type: application/json
 }
 
 ###
+POST http://localhost:8001/setParameter HTTP/1.1
+content-type: application/json
+
+{
+    "port":"8080"
+}
+
+###
+POST http://localhost:8002/setParameter HTTP/1.1
+content-type: application/json
+
+{
+    "port":"8080"
+}
+
+### -------------------------------------------------
 GET http://localhost:8000/setParameter?port=8080 HTTP/1.1
 
 ### Client
 
-GET http://localhost:8000/getWrongTrace/123456 HTTP/1.1
+GET http://localhost:8000/getWrongTrace/1/c074d0a90cd607b HTTP/1.1
 
+### Bad request
+GET http://localhost:8000/getWrongTrace/2/c074d0a90cd607b HTTP/1.1
 
 ### Backend
 POST http://localhost:8002/setParameter HTTP/1.1
@@ -31,5 +55,6 @@ POST http://localhost:8002/setWrongTraceId HTTP/1.1
 content-type: application/json
 
 {
-    "id":"654321"
+    "batchNo": 1,
+    "records": ["c074d0a90cd607b", "185d362e55d2c8ec"]
 }

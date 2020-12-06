@@ -2,15 +2,23 @@ package common
 
 import (
     "bufio"
+    "bytes"
+    "encoding/json"
     "fmt"
+    // "io"
     "log"
     "net/http"
     "os"
     "strings"
     "time"
+    // "sync"
+    // "math"
+    "strconv"
 
     "github.com/gofiber/fiber/v2"
 )
+
+var isRunning = false
 
 // SetParameterPostHandler is use for handling the SetParameterHandler endpoint
 func SetParameterPostHandler(c *fiber.Ctx) error {
@@ -30,7 +38,8 @@ func SetParameterPostHandler(c *fiber.Ctx) error {
 
     serverPort := GetEnvDefault("SERVER_PORT", "8002")
 
-    if serverPort != "8002" {
+    if serverPort != "8002" && !isRunning {
+        isRunning = true
         url := getURL(body.Port)
         go fetchData(url)
     }
@@ -67,28 +76,30 @@ func fetchData(url string){
         scanner := bufio.NewScanner(resp.Body)
         buf := make([]byte, 64*1024)
         scanner.Buffer(buf, bufio.MaxScanTokenSize)
-        // process(resp.Body)
-
-        // scanner := bufio.NewScanner(f)
 
         i := 0
-        lastCleanupIndex := i
+        batchNo := 0
         for scanner.Scan() {
             recordString := scanner.Text()
-            pushToCacheQueue(recordString, i)
-            // fmt.Println(scanner.Text())
+            pushToCache(recordString, batchNo)
 
-            // tigger the cleanup worker every 20000 record
-            if i - lastCleanupIndex > 20000 {
-                go cleanUpWorker(i)
+            // tigger time window
+            if i > 0 && i % 20000 == 0 {
+                wg.Add(1)
+                go func(batchNo int) {
+                    defer wg.Done()
+                    postTraceIDs(batchNo)
+                }(batchNo)
+
+                // fmt.Println("batchNo: ", batchNo)
+                batchNo++
             }
             i++
         }
         
         fmt.Println("xxxxxxxxxxxxxxxxxx: ", i)
-        for key, record := range CacheQueue {
-            fmt.Println("Key:", key, "=>", "Element:",record)
-        }
+        wg.Wait()
+        go postFinishSignal()
     }
     fmt.Println("################# : fetchingData END", time.Now())
 }
@@ -97,9 +108,9 @@ func getURL(port string) string {
     var url string
     switch currentServerPort := GetEnvDefault("SERVER_PORT", ""); currentServerPort {
     case "8000":
-        url = fmt.Sprintf("http://localhost:%v/trace1-small.data", port)
+        url = fmt.Sprintf("http://localhost:%v/trace1.data", port)
     case "8001":
-        url = fmt.Sprintf("http://localhost:%v/trace2-small.data", port)
+        url = fmt.Sprintf("http://localhost:%v/trace2.data", port)
     default:
         url = ""
     }
@@ -107,8 +118,7 @@ func getURL(port string) string {
     return url
 }
 
-func pushToCacheQueue(recordString string, currentLineNo int) {
-    CQLocker.Lock()
+func pushToCache(recordString string, batchNo int) {
     record := strings.Split(recordString, "|")
     traceID := record[0]
 
@@ -116,30 +126,79 @@ func pushToCacheQueue(recordString string, currentLineNo int) {
     hasError := false
     if len(record) > 8 {
         hasError = isErrorRecord(record[8])
-    }
 
-    // add the line to cacheQueue
-    data := &RecordTemplate{hasError, currentLineNo, false, []string{}}
-    if CacheQueue[traceID] != nil {
-        data = &RecordTemplate{hasError, currentLineNo, false, CacheQueue[traceID].records}
+        if hasError {
+            go func(){ BadTraceIDList = append(BadTraceIDList, traceID) }()
+        }
+
+        // add the line to cache server
+        traceCacheInfo, _ := CacheQueue.Load(traceID)
+        data := &RecordTemplate{hasError, batchNo, []string{}, ""}
+        if traceCacheInfo != nil {
+            traceInfo := traceCacheInfo.(*RecordTemplate)
+            newHasError := traceInfo.HasError
+            if !newHasError {
+                newHasError = hasError
+            }
+            data = &RecordTemplate{newHasError, batchNo, traceInfo.Records, GetEnvDefault("SERVER_PORT", "")}
+        }
+        data.UpdateRecord(recordString)
+        SetTraceInfo(traceID, data)
     }
-    data.UpdateRecord(recordString)
-    CacheQueue[traceID] = data
-    CQLocker.Unlock()
 }
 
 func isErrorRecord(tags string) bool {
-    result := (!strings.Contains(tags, "http.status_code=200") || strings.Contains(tags, "error=1"))
+    result := (strings.Contains(tags, "http.status_code=") && !strings.Contains(tags, "http.status_code=200")) || strings.Contains(tags, "error=1")
     return result
 }
 
-func cleanUpWorker(currentLineNo int) {
-    CQLocker.Lock()
-    for key, record := range CacheQueue {
-        if (currentLineNo - record.startLineNO > 2000 && !record.hasError || record.hasReport) {
-            // fmt.Println("---------------------------- Delete:", key)
-            delete(CacheQueue, key)
-        }
+func postTraceIDs(batchNo int) {
+    if len(BadTraceIDList) <=0 { return }
+
+    badListLocker.Lock()
+    badTraceIDList := BadTraceIDList
+    BadTraceIDList = []string{}
+
+    CacheQueue.Store(strconv.Itoa(batchNo), badTraceIDList)
+
+    mjson, err := json.Marshal(RecordTemplate {
+        BatchNo: batchNo,
+        Records: badTraceIDList,
+        Port:    GetEnvDefault("SERVER_PORT","3000"),
+    })
+    if err != nil {
+        log.Fatal(err)
     }
-    CQLocker.Unlock()
+
+    // fmt.Print("================= :", batchNo, " ----------- ", badTraceIDList, "\n")
+
+    badTraceIDList = []string{}
+    badListLocker.Unlock()
+
+    go func (mjson []byte)  {
+        res, err := http.Post("http://localhost:8002/setWrongTraceId", "application/json", bytes.NewBuffer(mjson))
+        if err != nil {
+            log.Fatal(err)
+        }
+        defer res.Body.Close()
+    }(mjson)
+}
+
+func postFinishSignal() {
+    type finishSignalTemplate struct {
+        Port  string
+    }
+
+    mjson, err := json.Marshal(finishSignalTemplate {
+        Port: GetEnvDefault("SERVER_PORT", "8002"),
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    res, err := http.Post("http://localhost:8002/finish", "application/json", bytes.NewBuffer(mjson))
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer res.Body.Close()
 }
