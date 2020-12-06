@@ -8,9 +8,11 @@ import (
 
 // RecordTemplate is a template for record down each line of trace record info
 type RecordTemplate struct {
-	HasError bool
-	BatchNo  int
-	Records  []string
+	Server      string
+	HasError    bool
+	BatchNo     int
+	Records     []string
+	SyncRecords sync.Map
 }
 
 // CacheQueue is to store the records
@@ -18,17 +20,11 @@ var CacheQueue = sync.Map{}
 
 // BadTraceIDList is recording down the bad trace IDs
 var BadTraceIDList = []string{}
-var badListLocker = sync.Mutex{}
 
 var wg sync.WaitGroup
 
 // BadTraceList is a list record down the bad trace
 var BadTraceList = make(map[string]*RecordTemplate)
-
-var cacheChan = make(chan string, 1)
-
-// PostTraceChan is a channel for sending/receiving the signal
-var PostTraceChan = make(chan string)
 
 // UpdateRecord is using for updating the record in cache
 func (data *RecordTemplate) UpdateRecord(record string) {

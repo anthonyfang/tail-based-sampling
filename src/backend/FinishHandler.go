@@ -1,6 +1,8 @@
 package backend
 
 import (
+	"tail-based-sampling/src/common"
+
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -11,7 +13,7 @@ func FinishHandler(c *fiber.Ctx) error {
 	// TODO
 	// if len(clientPorts) == 2 {
 
-	finishedSignal = true
+	common.FinishedChan <- "complete"
 
 	return c.SendString(msg)
 }

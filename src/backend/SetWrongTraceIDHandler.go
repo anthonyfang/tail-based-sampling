@@ -2,7 +2,7 @@ package backend
 
 import (
 	"fmt"
-	"sync"
+	"tail-based-sampling/src/common"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -10,6 +10,7 @@ import (
 // SetWrongTraceIDHandler is use for handle the setWrongTraceId endpoint
 func SetWrongTraceIDHandler(c *fiber.Ctx) error {
 	type Request struct {
+		Server  string   `json:"server"`
 		BatchNo int      `json:"batchNo"`
 		Records []string `json:"records"`
 	}
@@ -22,19 +23,13 @@ func SetWrongTraceIDHandler(c *fiber.Ctx) error {
 			"message": "Cannot parse Body JSON",
 		})
 	}
-	go addTraceID(body.BatchNo, body.Records)
+
+	for _, v := range body.Records {
+		// fmt.Println(v)
+		BackendTraceIDQueue.Store(v, body.BatchNo)
+	}
+
+	common.BatchReceivedCountChan <- body.BatchNo
 
 	return c.SendString("OK!")
-}
-
-func addTraceID(batchNo int, records []string) {
-	for _, v := range records {
-		// fmt.Println(v)
-		BackendTraceIDQueue.Store(v, false)
-	}
-	lock := &sync.Mutex{}
-	lock.Lock()
-	batchReceivedCount++
-	// fmt.Println(batchReceivedCount)
-	lock.Unlock()
 }
