@@ -8,9 +8,11 @@ import (
 	"strings"
 )
 
-var IsDebug = true
-var DebugTraceID = "x"
-var IsPrintOut = true
+const (
+	IS_DEBUG       = true
+	DEBUG_TRACE_ID = "x"
+	IS_PRINTOUT    = true
+)
 
 // GetEnvDefault is using for getting enviroment variable with default value
 func GetEnvDefault(key string, defVal string) string {

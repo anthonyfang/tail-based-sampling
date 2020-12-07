@@ -15,7 +15,7 @@ func GetWrongTraceHandler(c *fiber.Ctx) error {
 	data := &common.RecordTemplate{HasError: true, BatchNo: 0, Records: []string{}}
 	traceInfo := common.GetTraceInfo(traceID)
 
-	if common.IsDebug && traceID == common.DebugTraceID {
+	if common.IS_DEBUG && traceID == common.DEBUG_TRACE_ID {
 		fmt.Println(traceInfo)
 	}
 	if traceInfo != nil {

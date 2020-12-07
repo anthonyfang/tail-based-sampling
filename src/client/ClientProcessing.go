@@ -14,20 +14,21 @@ import (
 	"time"
 )
 
-var batchNo int32 = 1
+const (
+	TIME_WINDOW = 0.05
+	ROLLING     = 0.05
+	BATCH_GATE  = 25
+)
 
-var timeWindow = 0.05
-var timeRolling = 0.05
+var batchNo int32 = 1
 var currentTime int64 = 0
 var timeWindowStart int64 = 0
 var timeWindowEnd int64 = 0
 
 var TimeChan = make(chan int64)
 
-var batchGate = 15
-
 func processing() {
-
+	fmt.Println("Running Readline process...")
 	for {
 		select {
 		case newline, ok := <-common.NewLineChan:
@@ -36,7 +37,7 @@ func processing() {
 				common.FinishedChan <- "readline"
 				return
 			}
-			lineParts := strings.Split(newline, ",")
+			lineParts := strings.Split(newline, "|,,|")
 
 			batchNo, _ := strconv.Atoi(lineParts[1])
 
@@ -48,6 +49,7 @@ func processing() {
 }
 
 func windowing() {
+	fmt.Println("Running Windowing process...")
 	for {
 		val, ok := <-TimeChan // tigger time window
 		if !ok {
@@ -57,12 +59,12 @@ func windowing() {
 		rollOver := false
 		if timeWindowStart == 0 {
 			timeWindowStart = val
-			timeWindowEnd = timeWindowStart + int64(timeWindow*1000000)
+			timeWindowEnd = timeWindowStart + int64(TIME_WINDOW*1000000)
 		} else {
 			if val > timeWindowEnd {
 				rollOver = true
-				timeWindowStart = val + int64(timeRolling*1000000)
-				timeWindowEnd = timeWindowStart + int64(timeWindow*1000000)
+				timeWindowStart = val + int64(ROLLING*1000000)
+				timeWindowEnd = timeWindowStart + int64(TIME_WINDOW*1000000)
 			}
 		}
 
@@ -72,7 +74,7 @@ func windowing() {
 			common.CacheQueue.Range(func(k, v interface{}) bool {
 				if len(k.(string)) > 8 {
 					traceInfo := v.(*common.RecordTemplate)
-					if traceInfo.LifeTime > batchGate {
+					if traceInfo.LifeTime > BATCH_GATE {
 						common.CacheQueue.Delete(k)
 					} else {
 						traceInfo.LifeTime++
@@ -80,7 +82,7 @@ func windowing() {
 				} else {
 					num := k.(string)
 					numInt, _ := strconv.Atoi(num)
-					if numInt < int(batchNo)-batchGate {
+					if numInt < int(batchNo)-BATCH_GATE {
 						common.CacheQueue.Delete(k)
 					}
 				}
@@ -96,7 +98,9 @@ func windowing() {
 func postTraceIDs(batchNo int) {
 	var badListLocker = sync.Mutex{}
 
-	fmt.Println("triggered send IDs, current count: ", counter)
+	if common.IS_DEBUG {
+		fmt.Println("triggered send IDs, current count: ", counter)
+	}
 	badListLocker.Lock()
 	badTraceIDList := common.BadTraceIDList
 	common.BadTraceIDList = []string{}
@@ -114,13 +118,13 @@ func postTraceIDs(batchNo int) {
 	badTraceIDList = []string{}
 	badListLocker.Unlock()
 
-	go func(mjson []byte) {
-		res, err := http.Post("http://localhost:8002/setWrongTraceId", "application/json", bytes.NewBuffer(mjson))
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer res.Body.Close()
-	}(mjson)
+	//go func(mjson []byte) {
+	res, err := http.Post("http://localhost:8002/setWrongTraceId", "application/json", bytes.NewBuffer(mjson))
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer res.Body.Close()
+	// }(mjson)
 }
 
 func pushToCache(recordString string, batchNo int) {
@@ -146,7 +150,7 @@ func pushToCache(recordString string, batchNo int) {
 			// data = &common.RecordTemplate{traceInfo.Server, newHasError, batchNo, traceInfo.Records}
 			traceInfo.SyncRecords.Store(recordString, batchNo)
 
-			if common.IsDebug && traceID == common.DebugTraceID {
+			if common.IS_DEBUG && traceID == common.DEBUG_TRACE_ID {
 				fmt.Println("Add Trace: ", recordString)
 			}
 		} else {
@@ -154,7 +158,7 @@ func pushToCache(recordString string, batchNo int) {
 			data.SyncRecords.Store(recordString, batchNo)
 			common.CacheQueue.Store(traceID, data)
 
-			if common.IsDebug && traceID == common.DebugTraceID {
+			if common.IS_DEBUG && traceID == common.DEBUG_TRACE_ID {
 				fmt.Println("New Trace: ", recordString)
 			}
 		}

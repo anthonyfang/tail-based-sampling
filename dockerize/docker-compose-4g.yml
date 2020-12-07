@@ -14,7 +14,7 @@ services:
   client1:
       build:
         context: ..
-        dockerfile: ./dockerize/Dockerfile.dev
+        dockerfile: ./dockerize/Dockerfile
       container_name: 'clientprocess1'
       command: sh -c "go run server.go"
       environment:
@@ -33,7 +33,7 @@ services:
   client2:
       build:
         context: ..
-        dockerfile: ./dockerize/Dockerfile.dev
+        dockerfile: ./dockerize/Dockerfile
       container_name: 'clientprocess2'
       command: sh -c "go run server.go"
       environment:
@@ -52,7 +52,7 @@ services:
   backend:
       build:
         context: ..
-        dockerfile: ./dockerize/Dockerfile.dev
+        dockerfile: ./dockerize/Dockerfile
       container_name: 'backendprocess'
       command: sh -c "go run server.go"
       environment:

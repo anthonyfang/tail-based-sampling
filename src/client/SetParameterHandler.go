@@ -79,7 +79,7 @@ func fetchData(url string) {
 
 		for scanner.Scan() {
 			recordString := scanner.Text()
-			common.NewLineChan <- fmt.Sprintf("%s,%i", recordString, int(batchNo))
+			common.NewLineChan <- fmt.Sprintf("%s|,,|%i", recordString, int(batchNo))
 		}
 
 		close(common.NewLineChan)
@@ -99,7 +99,7 @@ func fetchData(url string) {
 
 				return
 			}
-			time.Sleep(100)
+			time.Sleep(500)
 		}
 	}
 }

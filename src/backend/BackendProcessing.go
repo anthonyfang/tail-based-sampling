@@ -13,7 +13,8 @@ import (
 )
 
 const (
-	MAX_CONCURRENCY = 60
+	MAX_CONCURRENCY = 20
+	BATCH_GATE      = 4
 )
 
 var batchReceivedCount = 0
@@ -28,14 +29,12 @@ var tmpChan = make(chan struct{}, MAX_CONCURRENCY)
 
 var finishSignals = 0
 
-var batchGate = 4
-
 var tmpBatchQueue = make(map[int]bool)
 
 var tmpCheckSumQueue = make(map[string]*common.RecordTemplate)
 
 func processing() {
-
+	fmt.Println("Running Backend process...")
 	defer close(common.FinishedChan)
 
 	go func() {
@@ -102,17 +101,19 @@ func processing() {
 }
 
 func processAllCachedBatches(noControl bool) {
-	fmt.Println("processing")
+	if common.IS_DEBUG {
+		fmt.Println("processing")
+	}
 	var sendNum uint64 = 0
 
 	for tmpBatchNo, _ := range tmpBatchQueue {
 
 		var num, _ = BackendBatchQueue.Load(tmpBatchNo)
-		if common.IsDebug {
+		if common.IS_DEBUG {
 			fmt.Println("tmpBatchQueue[", tmpBatchNo, "] - BackendBatchQueue[", tmpBatchNo, "]: ", num)
 		}
-		// fmt.Println("num.(int) > len(clientHosts):", num.(int) > len(clientHosts), ", len(tmpBatchQueue)%batchGate: ", len(tmpBatchQueue)%batchGate)
-		if noControl || (num.(int) >= len(clientHosts) && len(tmpBatchQueue) >= batchGate) {
+		// fmt.Println("num.(int) > len(clientHosts):", num.(int) > len(clientHosts), ", len(tmpBatchQueue)%BATCH_GATE: ", len(tmpBatchQueue)%BATCH_GATE)
+		if noControl || (num.(int) >= len(clientHosts) && len(tmpBatchQueue) >= BATCH_GATE) {
 			BackendTraceIDQueue.Range(func(k, v interface{}) bool {
 				batchNo := v.(int)
 
@@ -140,7 +141,7 @@ func processAllCachedBatches(noControl bool) {
 					if traceInfoCache != nil && len(traceInfoCache.Records) > 0 {
 						// sort
 						traceInfoCache.SortRecords()
-						if common.IsDebug && traceID == common.DebugTraceID {
+						if common.IS_DEBUG && traceID == common.DEBUG_TRACE_ID {
 							fmt.Println(traceInfoCache)
 						}
 						// generate checkSum to result queue
@@ -158,7 +159,7 @@ func processAllCachedBatches(noControl bool) {
 				}
 				return true
 			})
-			if common.IsDebug {
+			if common.IS_DEBUG {
 				fmt.Println("BatchNo", tmpBatchNo, ", Sent numbers: ", sendNum)
 			}
 		}
@@ -186,7 +187,7 @@ func getWrongTraceInfo(URL string, traceID string, id int, wgHostData *sync.Wait
 		log.Fatalln(err)
 	}
 	// Push into the cache server
-	if common.IsDebug && traceID == common.DebugTraceID {
+	if common.IS_DEBUG && traceID == common.DEBUG_TRACE_ID {
 		fmt.Println("-----traceInfo start----")
 		fmt.Println(traceInfo.Records)
 		fmt.Println("-----traceInfo end----")
