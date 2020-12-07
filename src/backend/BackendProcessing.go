@@ -76,6 +76,22 @@ func processing() {
 					}
 					fmt.Println("============= END ================", time.Now())
 				}()
+
+				// BackendTraceIDQueue.Range(func(k, v interface{}) bool {
+				// 	fmt.Println("BackendTraceIDQueue", k, "-", v)
+				// 	return true
+				// })
+
+				// common.CacheQueue.Range(func(k, v interface{}) bool {
+				// 	fmt.Println("common.CacheQueue", k, "-", v)
+				// 	return true
+				// })
+
+				// BackendBatchQueue.Range(func(k, v interface{}) bool {
+				// 	fmt.Println("BackendBatchQueue", k, "-", v)
+				// 	return true
+				// })
+
 				return
 			}
 
@@ -135,6 +151,7 @@ func processAllCachedBatches(noControl bool) {
 					for i, _ := range clientHosts {
 						common.CacheQueue.Delete(traceID + "-" + strconv.Itoa(i))
 					}
+					common.CacheQueue.Delete(traceID)
 					BackendTraceIDQueue.Delete(k)
 					BackendBatchQueue.Delete(v.(int))
 					tmpBatchQueue[v.(int)] = true

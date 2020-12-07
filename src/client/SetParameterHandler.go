@@ -80,7 +80,6 @@ func fetchData(url string) {
 		for scanner.Scan() {
 			recordString := scanner.Text()
 			common.NewLineChan <- fmt.Sprintf("%s,%i", recordString, int(batchNo))
-			// time.Sleep(2 * time.Second)
 		}
 
 		close(common.NewLineChan)
@@ -97,6 +96,7 @@ func fetchData(url string) {
 
 				fmt.Println("################# : fetchingData END", time.Now())
 				fmt.Println("################# : fetchingData Total Elapsed Time: ", time.Since(startTime))
+
 				return
 			}
 			time.Sleep(100)

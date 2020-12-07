@@ -8,9 +8,9 @@ import (
 
 // RecordTemplate is a template for record down each line of trace record info
 type RecordTemplate struct {
-	Server      string
 	HasError    bool
 	BatchNo     int
+	LifeTime    int
 	Records     []string
 	SyncRecords sync.Map
 }

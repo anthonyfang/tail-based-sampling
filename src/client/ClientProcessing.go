@@ -24,6 +24,8 @@ var timeWindowEnd int64 = 0
 
 var TimeChan = make(chan int64)
 
+var batchGate = 10
+
 func processing() {
 
 	for {
@@ -66,6 +68,24 @@ func windowing() {
 
 		if rollOver {
 			postTraceIDs(int(batchNo))
+
+			common.CacheQueue.Range(func(k, v interface{}) bool {
+				if len(k.(string)) > 8 {
+					traceInfo := v.(*common.RecordTemplate)
+					if traceInfo.LifeTime > batchGate {
+						common.CacheQueue.Delete(k)
+					} else {
+						traceInfo.LifeTime++
+					}
+				} else {
+					num := k.(string)
+					numInt, _ := strconv.Atoi(num)
+					if numInt < int(batchNo)-batchGate {
+						common.CacheQueue.Delete(k)
+					}
+				}
+				return true
+			})
 			// fmt.Println("batchNo: ", batchNo)
 			atomic.AddInt32(&batchNo, 1)
 		}
@@ -84,7 +104,6 @@ func postTraceIDs(batchNo int) {
 	common.CacheQueue.Store(strconv.Itoa(batchNo), badTraceIDList)
 
 	mjson, err := json.Marshal(common.RecordTemplate{
-		Server:  common.GetEnvDefault("SERVER_PORT", "3000"),
 		BatchNo: batchNo,
 		Records: badTraceIDList,
 	})
@@ -115,7 +134,7 @@ func pushToCache(recordString string, batchNo int) {
 		hasError = isErrorRecord(record[8])
 		// add the line to cache server
 		traceCacheInfo, _ := common.CacheQueue.Load(traceID)
-		data := &common.RecordTemplate{"", hasError, batchNo, []string{}, sync.Map{}}
+		data := &common.RecordTemplate{hasError, batchNo, 0, []string{}, sync.Map{}}
 
 		if traceCacheInfo != nil {
 			traceInfo := traceCacheInfo.(*common.RecordTemplate)
