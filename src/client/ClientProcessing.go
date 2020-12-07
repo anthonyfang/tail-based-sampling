@@ -24,7 +24,7 @@ var timeWindowEnd int64 = 0
 
 var TimeChan = make(chan int64)
 
-var batchGate = 10
+var batchGate = 15
 
 func processing() {
 
