@@ -18,9 +18,9 @@ type WsConn struct {
 }
 
 func (p *WsConn) send(mt int, msg []byte) error {
-	p.Mux.Lock()
+	//p.Mux.Lock()
 	err := p.Conn.WriteMessage(mt, msg)
-	p.Mux.Unlock()
+	//p.Mux.Unlock()
 	return err
 }
 
@@ -39,6 +39,7 @@ func WsServerHandler(c *websocket.Conn) {
 	// c.Locals is added to the *websocket.Conn
 	log.Println(c.Locals("allowed"))  // true
 	log.Println(c.Params("id"))       // 123
+	log.Println(c.Params("type"))     // 123
 	log.Println(c.Query("v"))         // 1.0
 	log.Println(c.Cookies("session")) // ""
 
@@ -105,8 +106,7 @@ func wsWriteLoop() {
 		err error
 	)
 
-	for {
-		messageToSend, _ := <-common.ServerSendWSChan
+	for messageToSend := range common.ServerSendWSChan {
 		wg.Add(2)
 		var payload common.Payload
 		traceID := messageToSend.(string)
@@ -115,11 +115,12 @@ func wsWriteLoop() {
 		msg, err = json.Marshal(payload)
 
 		for _, client := range wsclients {
-			if err = client.send(websocket.BinaryMessage, msg); err != nil {
-				log.Println("write:", err)
+			if client.Params("type") == "info" {
+				if err = client.send(websocket.BinaryMessage, msg); err != nil {
+					log.Println("write:", err)
+				}
 			}
 		}
-		time.Sleep(200)
 	}
 }
 

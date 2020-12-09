@@ -10,20 +10,24 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-var ws *websocket.Conn
+var ws1 *websocket.Conn
+var ws2 *websocket.Conn
 
-func wsConnection() {
+func WsConnection() {
 
 	var port = common.GetEnvDefault("SERVER_PORT", "3000")
 	var origin = "http://127.0.0.1:" + port + "/"
-	var url = "ws://127.0.0.1:8002/ws/" + port
+	var url_1 = "ws://127.0.0.1:8002/ws/" + port + "/ids"
+	var url_2 = "ws://127.0.0.1:8002/ws/" + port + "/info"
 
-	ws, _ = websocket.Dial(url, "", origin)
+	ws1, _ = websocket.Dial(url_1, "", origin)
+	ws2, _ = websocket.Dial(url_2, "", origin)
 
 	fmt.Println("Websocket connected with backend successfully.")
 	// go wsProcessing()
 
-	defer ws.Close()
+	defer ws1.Close()
+	defer ws2.Close()
 
 	for {
 		// message, _ := <-common.ClientSendWSChan
@@ -31,7 +35,7 @@ func wsConnection() {
 
 		//------ Receive msg -------//
 		var msg = make([]byte, 128)
-		total, err := ws.Read(msg)
+		total, err := ws2.Read(msg)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -46,7 +50,7 @@ func wsConnection() {
 
 		switch payload.Action {
 		case "GetWrongTrace":
-			ReturnWrongTrace(ws, payload.ID)
+			ReturnWrongTrace(ws2, payload.ID)
 
 		default:
 			break

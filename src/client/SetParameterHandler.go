@@ -51,8 +51,6 @@ func SetParameterGetHandler(c *fiber.Ctx) error {
 		isRunning = true
 		url := getURL(port)
 
-		go wsConnection()
-
 		go windowing()
 
 		go processing()
@@ -80,12 +78,11 @@ func fetchData(url string) {
 
 		for scanner.Scan() {
 			recordString := scanner.Text()
-			common.NewLineChan <- fmt.Sprintf("%s|,,|%i", recordString, int(batchNo))
+			common.NewLineChan <- common.NewLine{Line: recordString, BatchNo: int(batchNo)}
 		}
 
 		close(common.NewLineChan)
-		for {
-			msg := <-common.FinishedChan
+		for msg := range common.FinishedChan {
 			if msg == "readline" {
 				TimeChan <- timeWindowEnd + 1
 				close(TimeChan)
@@ -98,21 +95,20 @@ func fetchData(url string) {
 				fmt.Println("################# : fetchingData END", time.Now())
 				fmt.Println("################# : fetchingData Total Elapsed Time: ", time.Since(startTime))
 
-				return
+				// return
 			}
-			time.Sleep(500)
 		}
 	}
 }
 
 func getURL(port string) string {
 	var url string
-	port = "8080"
+	// port = "8080"
 	switch currentServerPort := common.GetEnvDefault("SERVER_PORT", ""); currentServerPort {
 	case "8000":
-		url = fmt.Sprintf("http://localhost:%v/trace1-4G.data", port)
+		url = fmt.Sprintf("http://localhost:%v/trace1.data", port)
 	case "8001":
-		url = fmt.Sprintf("http://localhost:%v/trace2-4G.data", port)
+		url = fmt.Sprintf("http://localhost:%v/trace2.data", port)
 	default:
 		url = ""
 	}
@@ -121,17 +117,12 @@ func getURL(port string) string {
 }
 
 func postFinishSignal() {
-	// res, err := http.Post("http://localhost:8002/finish", "application/json", bytes.NewBuffer(mjson))
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-	// defer res.Body.Close()
 	var payload = new(common.Payload)
 	payload.SendFinishGen(common.GetEnvDefault("SERVER_PORT", "8002"))
 
 	msg, _ := json.Marshal(payload)
 
-	_, err := ws.Write(msg)
+	_, err := ws1.Write(msg)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -15,7 +15,7 @@ import (
 const (
 	TIME_WINDOW = 0.05
 	ROLLING     = 0.05
-	BATCH_GATE  = 25
+	BATCH_GATE  = 35
 )
 
 var batchNo int32 = 1
@@ -27,33 +27,15 @@ var TimeChan = make(chan int64)
 
 func processing() {
 	fmt.Println("Running Readline process...")
-	for {
-		select {
-		case newline, ok := <-common.NewLineChan:
-
-			if !ok {
-				common.FinishedChan <- "readline"
-				return
-			}
-			lineParts := strings.Split(newline, "|,,|")
-
-			batchNo, _ := strconv.Atoi(lineParts[1])
-
-			pushToCache(lineParts[0], batchNo)
-
-		}
-		time.Sleep(100)
+	for newline := range common.NewLineChan {
+		pushToCache(newline.Line, newline.BatchNo)
 	}
+	common.FinishedChan <- "readline"
 }
 
 func windowing() {
 	fmt.Println("Running Windowing process...")
-	for {
-		val, ok := <-TimeChan // tigger time window
-		if !ok {
-			common.FinishedChan <- "timeWindow"
-			return
-		}
+	for val := range TimeChan { // tigger time window
 		rollOver := false
 		if timeWindowStart == 0 {
 			timeWindowStart = val
@@ -68,29 +50,33 @@ func windowing() {
 
 		if rollOver {
 			postTraceIDs(int(batchNo))
-
-			common.CacheQueue.Range(func(k, v interface{}) bool {
-				if len(k.(string)) > 8 {
-					traceInfo := v.(*common.RecordTemplate)
-					if traceInfo.LifeTime > BATCH_GATE {
-						common.CacheQueue.Delete(k)
-					} else {
-						traceInfo.LifeTime++
-					}
-				} else {
-					num := k.(string)
-					numInt, _ := strconv.Atoi(num)
-					if numInt < int(batchNo)-BATCH_GATE {
-						common.CacheQueue.Delete(k)
-					}
-				}
-				return true
-			})
-			// fmt.Println("batchNo: ", batchNo)
 			atomic.AddInt32(&batchNo, 1)
+
+			go func() {
+				common.CacheQueue.Range(func(k, v interface{}) bool {
+					if len(k.(string)) > 8 {
+						traceInfo := v.(*common.RecordTemplate)
+						if traceInfo.LifeTime > BATCH_GATE {
+							common.CacheQueue.Delete(k)
+						} else {
+							traceInfo.LifeTime++
+						}
+					} else {
+						num := k.(string)
+						numInt, _ := strconv.Atoi(num)
+						if numInt < int(batchNo)-BATCH_GATE {
+							common.CacheQueue.Delete(k)
+						}
+					}
+					return true
+				})
+			}()
+			// fmt.Println("batchNo: ", batchNo)
 		}
-		time.Sleep(100)
 	}
+	// postTraceIDs(int(batchNo))
+	time.Sleep(time.Millisecond * 100)
+	common.FinishedChan <- "timeWindow"
 }
 
 func postTraceIDs(batchNo int) {
@@ -99,32 +85,30 @@ func postTraceIDs(batchNo int) {
 	if common.IS_DEBUG {
 		fmt.Println("triggered send IDs, current count: ", counter)
 	}
-	badListLocker.Lock()
-	badTraceIDList := common.BadTraceIDList
-	common.BadTraceIDList = []string{}
+	go func(batchNo int) {
+		badListLocker.Lock()
+		badTraceIDList := common.BadTraceIDList
+		common.BadTraceIDList = []string{}
 
-	common.CacheQueue.Store(strconv.Itoa(batchNo), badTraceIDList)
+		common.CacheQueue.Store(strconv.Itoa(batchNo), badTraceIDList)
 
-	var payload = new(common.Payload)
-	payload.SetWrongTraceIDGen(strconv.Itoa(batchNo), badTraceIDList)
+		if batchNo > 1 {
+			var payload = new(common.Payload)
+			previousBatch := batchNo - 1
+			badTraceIDs, _ := common.CacheQueue.Load(strconv.Itoa(previousBatch))
 
-	msg, _ := json.Marshal(payload)
+			payload.SetWrongTraceIDGen(strconv.Itoa(previousBatch), badTraceIDs.([]string))
 
-	_, err := ws.Write(msg)
-	if err != nil {
-		log.Fatal(err)
-	}
+			msg, _ := json.Marshal(payload)
 
-	badTraceIDList = []string{}
-	badListLocker.Unlock()
-
-	// //go func(mjson []byte) {
-	// res, err := http.Post("http://localhost:8002/setWrongTraceId", "application/json", bytes.NewBuffer(mjson))
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-	// defer res.Body.Close()
-	// // }(mjson)
+			_, err := ws1.Write(msg)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+		badTraceIDList = []string{}
+		badListLocker.Unlock()
+	}(batchNo)
 }
 
 func pushToCache(recordString string, batchNo int) {
@@ -147,7 +131,7 @@ func pushToCache(recordString string, batchNo int) {
 				newHasError = hasError
 			}
 			traceInfo.HasError = newHasError
-			// data = &common.RecordTemplate{traceInfo.Server, newHasError, batchNo, traceInfo.Records}
+
 			traceInfo.SyncRecords.Store(recordString, batchNo)
 
 			if common.IS_DEBUG && traceID == common.DEBUG_TRACE_ID {

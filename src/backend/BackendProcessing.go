@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	BATCH_GATE = 4
+	BATCH_GATE = 6
 )
 
 var batchReceivedCount = 0
@@ -55,18 +55,15 @@ func processing() {
 
 				func() {
 					fmt.Println("============= Result ================")
-					resultQueueLocker.Lock()
 					for key, value := range resultQueue {
 						fmt.Println("XXXXXXXXXXXXX ", key, ": --------- ", value)
 					}
-					resultQueueLocker.Unlock()
 					fmt.Println("============= END ================", time.Now())
 				}()
 
 				return
 			}
 		}
-
 		time.Sleep(100)
 	}
 }
@@ -78,6 +75,14 @@ func agregateForTraceID() {
 		var ptNum = ptValue.(*uint32)
 		atomic.AddUint32(ptNum, 1)
 		// fmt.Println(*ptNum)
+
+		// var x, ok = BackendReceivedTraceInfo.Load(traceID)
+		// var num = 1
+		// if ok {
+		// 	num = x.(int) + 1
+		// }
+		// BackendReceivedTraceInfo.Store(traceID, *ptNum)
+
 		if int(*ptNum) >= len(common.ClientHosts) {
 
 			newInfoArr := []string{}
@@ -104,6 +109,7 @@ func agregateForTraceID() {
 				common.CacheQueue.Delete(traceID + "-" + strconv.Itoa(i))
 			}
 
+			BackendReceivedTraceInfo.Delete(traceID)
 			common.CacheQueue.Delete(traceID)
 
 		}

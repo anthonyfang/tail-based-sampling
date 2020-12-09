@@ -2,6 +2,7 @@ package common
 
 import (
 	"math/rand"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -57,7 +58,9 @@ func quicksort(a []string) []string {
 	a[pivot], a[right] = a[right], a[pivot]
 
 	for i, _ := range a {
-		if a[i] < a[right] {
+		time_i, _ := strconv.Atoi(strings.Split(a[i], "|")[1])
+		time_right, _ := strconv.Atoi(strings.Split(a[right], "|")[1])
+		if time_i < time_right {
 			a[left], a[i] = a[i], a[left]
 			left++
 		}

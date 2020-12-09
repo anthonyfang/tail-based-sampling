@@ -21,9 +21,16 @@ func main() {
 		return c.SendString("Hello Baby ~ Johnny is coming!")
 	})
 
-	app.Get("/ready", func(c *fiber.Ctx) error {
-		return c.SendString(fmt.Sprintf("Server is running on port: %v", port))
-	})
+	if port == "8002" {
+		app.Get("/ready", func(c *fiber.Ctx) error {
+			return c.SendString(fmt.Sprintf("Server is running on port: %v", port))
+		})
+	} else {
+		app.Get("/ready", func(c *fiber.Ctx) error {
+			go CliendHandler.WsConnection()
+			return c.SendString(fmt.Sprintf("Server is running on port: %v", port))
+		})
+	}
 
 	if port == "8002" {
 		app.Post("/setParameter", BackendHandler.SetParameterPostHandler)
@@ -50,7 +57,7 @@ func main() {
 		return fiber.ErrUpgradeRequired
 	})
 
-	app.Get("/ws/:id", websocket.New(BackendHandler.WsServerHandler))
+	app.Get("/ws/:id/:type", websocket.New(BackendHandler.WsServerHandler))
 
 	app.Listen(":" + port)
 }

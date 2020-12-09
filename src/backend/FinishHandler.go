@@ -1,16 +1,16 @@
 package backend
 
-import (
-	"tail-based-sampling/src/common"
+// import (
+// 	"tail-based-sampling/src/common"
 
-	"github.com/gofiber/fiber/v2"
-)
+// 	"github.com/gofiber/fiber/v2"
+// )
 
-// FinishHandler is using for trigger calculation
-func FinishHandler(c *fiber.Ctx) error {
-	msg := "Finished!"
+// // FinishHandler is using for trigger calculation
+// func FinishHandler(c *fiber.Ctx) error {
+// 	msg := "Finished!"
 
-	common.FinishedChan <- msg
+// 	common.FinishedChan <- msg
 
-	return c.SendString(msg)
-}
+// 	return c.SendString(msg)
+// }

@@ -35,12 +35,17 @@ func (p *Payload) SendFinishGen(port string) {
 	p.Records = []string{}
 }
 
+type NewLine struct {
+	Line    string
+	BatchNo int
+}
+
 // Channels
 // ------------ Clients ----------------- //
 
 var CacheChan = make(chan string, 1)
 
-var NewLineChan = make(chan string, 200000)
+var NewLineChan = make(chan NewLine, 200000)
 
 // PostTraceChan is a channel for sending/receiving the signal
 var PostTraceChan = make(chan string)
