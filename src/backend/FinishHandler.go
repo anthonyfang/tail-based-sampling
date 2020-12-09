@@ -10,10 +10,7 @@ import (
 func FinishHandler(c *fiber.Ctx) error {
 	msg := "Finished!"
 
-	// TODO
-	// if len(clientPorts) == 2 {
-
-	common.FinishedChan <- "complete"
+	common.FinishedChan <- msg
 
 	return c.SendString(msg)
 }

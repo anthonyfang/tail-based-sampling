@@ -5,7 +5,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	// "github.com/gofiber/websocket/v2"
+	"github.com/gofiber/websocket/v2"
 
 	BackendHandler "tail-based-sampling/src/backend"
 	CliendHandler "tail-based-sampling/src/client"
@@ -33,13 +33,24 @@ func main() {
 		app.Get("/setParameter", CliendHandler.SetParameterGetHandler)
 	}
 
-	if port == "8002" {
-		app.Post("/setWrongTraceId", BackendHandler.SetWrongTraceIDHandler)
-		app.Post("/finish", BackendHandler.FinishHandler)
-	} else {
-		app.Get("/getWrongTrace/:traceID", CliendHandler.GetWrongTraceHandler)
-	}
+	// if port == "8002" {
+	// 	app.Post("/setWrongTraceId", BackendHandler.SetWrongTraceIDHandler)
+	// 	app.Post("/finish", BackendHandler.FinishHandler)
+	// } else {
+	// 	app.Get("/getWrongTrace/:traceID", CliendHandler.GetWrongTraceHandler)
+	// }
+
+	app.Use("/ws", func(c *fiber.Ctx) error {
+		// IsWebSocketUpgrade returns true if the client
+		// requested upgrade to the WebSocket protocol.
+		if websocket.IsWebSocketUpgrade(c) {
+			c.Locals("allowed", true)
+			return c.Next()
+		}
+		return fiber.ErrUpgradeRequired
+	})
+
+	app.Get("/ws/:id", websocket.New(BackendHandler.WsServerHandler))
 
 	app.Listen(":" + port)
-
 }

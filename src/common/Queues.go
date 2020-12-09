@@ -1,7 +1,7 @@
 package common
 
 import (
-	"strconv"
+	"math/rand"
 	"strings"
 	"sync"
 )
@@ -34,23 +34,41 @@ func (data *RecordTemplate) UpdateRecord(record string) {
 // SortRecords is sorting the records field
 func (data *RecordTemplate) SortRecords() {
 	// bubbleSort
-	len := len(data.Records)
+	// len := len(data.Records)
+	// for i := 0; i < len-1; i++ {
+	// 	for j := 0; j < len-1-i; j++ {
+	// 		arrJ, _ := strconv.Atoi(strings.Split(data.Records[j], "|")[1])
+	// 		arrJ1, _ := strconv.Atoi(strings.Split(data.Records[j+1], "|")[1])
 
-	for i := 0; i < len-1; i++ {
-		for j := 0; j < len-1-i; j++ {
-			arrJ, _ := strconv.Atoi(strings.Split(data.Records[j], "|")[1])
-			arrJ1, _ := strconv.Atoi(strings.Split(data.Records[j+1], "|")[1])
-
-			if arrJ > arrJ1 {
-				temp := data.Records[j+1]
-				data.Records[j+1] = data.Records[j]
-				data.Records[j] = temp
-			}
-		}
-	}
+	// 		if arrJ > arrJ1 {
+	// 			data.Records[j], data.Records[j+1] = data.Records[j+1], data.Records[j]
+	// 		}
+	// 	}
+	// }
+	quicksort(data.Records)
 }
 
-// GenCheckSumToQueue is using for generate the ckSum
+func quicksort(a []string) []string {
+	if len(a) < 2 {
+		return a
+	}
+	left, right := 0, len(a)-1
+	pivot := rand.Int() % len(a)
+	a[pivot], a[right] = a[right], a[pivot]
+
+	for i, _ := range a {
+		if a[i] < a[right] {
+			a[left], a[i] = a[i], a[left]
+			left++
+		}
+	}
+	a[left], a[right] = a[right], a[left]
+	quicksort(a[:left])
+	quicksort(a[left+1:])
+	return a
+}
+
+// GenCheckSumToQueue is used for generate the ckSum
 func (data *RecordTemplate) GenCheckSumToQueue(traceID string, result map[string]string) {
 	checkSumString := strings.Join(data.Records, "\n") + "\n"
 	result[traceID] = MD5(checkSumString)

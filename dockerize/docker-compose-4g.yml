@@ -16,7 +16,7 @@ services:
         context: ..
         dockerfile: ./dockerize/Dockerfile
       container_name: 'clientprocess1'
-      command: sh -c "go run server.go"
+      command: sh -c "cd /tail-based-sampling; go run server.go"
       environment:
         - SERVER_PORT=8000
       ports:
@@ -35,7 +35,7 @@ services:
         context: ..
         dockerfile: ./dockerize/Dockerfile
       container_name: 'clientprocess2'
-      command: sh -c "go run server.go"
+      command: sh -c "cd /tail-based-sampling; go run server.go"
       environment:
         - SERVER_PORT=8001
       ports:
@@ -54,7 +54,7 @@ services:
         context: ..
         dockerfile: ./dockerize/Dockerfile
       container_name: 'backendprocess'
-      command: sh -c "go run server.go"
+      command: sh -c "cd /tail-based-sampling; go run server.go"
       environment:
         - SERVER_PORT=8002
       ports:

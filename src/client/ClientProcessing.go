@@ -1,11 +1,9 @@
 package client
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
 	"strconv"
 	"strings"
 	"sync"
@@ -107,10 +105,12 @@ func postTraceIDs(batchNo int) {
 
 	common.CacheQueue.Store(strconv.Itoa(batchNo), badTraceIDList)
 
-	mjson, err := json.Marshal(common.RecordTemplate{
-		BatchNo: batchNo,
-		Records: badTraceIDList,
-	})
+	var payload = new(common.Payload)
+	payload.SetWrongTraceIDGen(strconv.Itoa(batchNo), badTraceIDList)
+
+	msg, _ := json.Marshal(payload)
+
+	_, err := ws.Write(msg)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -118,13 +118,13 @@ func postTraceIDs(batchNo int) {
 	badTraceIDList = []string{}
 	badListLocker.Unlock()
 
-	//go func(mjson []byte) {
-	res, err := http.Post("http://localhost:8002/setWrongTraceId", "application/json", bytes.NewBuffer(mjson))
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer res.Body.Close()
-	// }(mjson)
+	// //go func(mjson []byte) {
+	// res, err := http.Post("http://localhost:8002/setWrongTraceId", "application/json", bytes.NewBuffer(mjson))
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	// defer res.Body.Close()
+	// // }(mjson)
 }
 
 func pushToCache(recordString string, batchNo int) {

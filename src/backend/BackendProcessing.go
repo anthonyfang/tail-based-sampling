@@ -1,12 +1,9 @@
 package backend
 
 import (
-	"encoding/json"
 	"fmt"
-	"log"
-	"net/http"
 	"strconv"
-	"sync"
+	"strings"
 	"sync/atomic"
 	"tail-based-sampling/src/common"
 	"time"
@@ -18,141 +15,132 @@ const (
 )
 
 var batchReceivedCount = 0
-
-var ch = make(chan struct{})
-
-var clientHosts = []string{"http://localhost:8000", "http://localhost:8001"}
-
-//var clientHosts = []string{"http://localhost:8000"}
+var finishSignals = 0
 
 var tmpChan = make(chan struct{}, MAX_CONCURRENCY)
 
-var finishSignals = 0
-
 var tmpBatchQueue = make(map[int]bool)
-
 var tmpCheckSumQueue = make(map[string]*common.RecordTemplate)
 
 func processing() {
 	fmt.Println("Running Backend process...")
 	defer close(common.FinishedChan)
 
-	go func() {
-		for traceID := range common.GenCheckSumToQueueChan {
-			resultQueueLocker.Lock()
-			tmpCheckSumQueue[traceID].GenCheckSumToQueue(traceID, resultQueue)
-			resultQueueLocker.Unlock()
+	go agregateForTraceID()
 
-			time.Sleep(500)
-		}
-	}()
+	go wsWriteLoop()
 
 	for {
 		select {
 		case batchNo := <-common.BatchReceivedCountChan:
+			// var x = new(uint32)
+			// var ptValue, _ = BackendBatchQueue.LoadOrStore(batchNo, x)
+			// var ptNum = ptValue.(*uint32)
+			// atomic.AddUint32(ptNum, 1)
+			var x, ok = BackendBatchQueue.Load(batchNo)
+			var num = 1
 
-			var num, ok = BackendBatchQueue.Load(batchNo)
-			if !ok {
-				num = 0
+			if ok {
+				num = x.(int) + 1
 			}
-			num = num.(int) + 1
 			BackendBatchQueue.Store(batchNo, num)
-
 			tmpBatchQueue[batchNo] = false
 
 			processAllCachedBatches(false)
 
 		case <-common.FinishedChan:
 			finishSignals++
-			if finishSignals == len(clientHosts) {
+
+			if finishSignals == len(common.ClientHosts) {
 				processAllCachedBatches(true)
-				time.Sleep(200)
+				wg.Wait()
+
 				sendCheckSum(resultQueue)
+
 				func() {
 					fmt.Println("============= Result ================")
+					resultQueueLocker.Lock()
 					for key, value := range resultQueue {
 						fmt.Println("XXXXXXXXXXXXX ", key, ": --------- ", value)
 					}
+					resultQueueLocker.Unlock()
 					fmt.Println("============= END ================", time.Now())
 				}()
 
-				// BackendTraceIDQueue.Range(func(k, v interface{}) bool {
-				// 	fmt.Println("BackendTraceIDQueue", k, "-", v)
-				// 	return true
-				// })
-
-				// common.CacheQueue.Range(func(k, v interface{}) bool {
-				// 	fmt.Println("common.CacheQueue", k, "-", v)
-				// 	return true
-				// })
-
-				// BackendBatchQueue.Range(func(k, v interface{}) bool {
-				// 	fmt.Println("BackendBatchQueue", k, "-", v)
-				// 	return true
-				// })
-
 				return
 			}
-
 		}
 
 		time.Sleep(100)
 	}
 }
 
-func processAllCachedBatches(noControl bool) {
+func agregateForTraceID() {
+	for traceID := range common.ReceivedTraceInfoChan {
+		var x = new(uint32)
+		var ptValue, _ = BackendReceivedTraceInfo.LoadOrStore(traceID, x)
+		var ptNum = ptValue.(*uint32)
+		atomic.AddUint32(ptNum, 1)
+		// fmt.Println(*ptNum)
+		if int(*ptNum) >= len(common.ClientHosts) {
+
+			newInfoArr := []string{}
+			traceInfoCache := common.GetTraceInfo(traceID)
+
+			for _, url := range common.ClientHosts {
+				urlParts := strings.Split(url, ":")
+				traceInfo := common.GetTraceInfo(traceID + "-" + urlParts[2])
+				newInfoArr = append(newInfoArr, traceInfo.Records...)
+			}
+			traceInfoCache.Records = append(traceInfoCache.Records, newInfoArr...)
+			if traceInfoCache != nil && len(traceInfoCache.Records) > 0 {
+				// sort
+				traceInfoCache.SortRecords()
+				if common.IS_DEBUG && traceID == common.DEBUG_TRACE_ID {
+					fmt.Println(traceInfoCache)
+				}
+				// generate checkSum to result queue
+				tmpCheckSumQueue[traceID] = traceInfoCache
+				tmpCheckSumQueue[traceID].GenCheckSumToQueue(traceID, resultQueue)
+				// common.GenCheckSumToQueueChan <- traceID
+			}
+			for i, _ := range common.ClientHosts {
+				common.CacheQueue.Delete(traceID + "-" + strconv.Itoa(i))
+			}
+
+			common.CacheQueue.Delete(traceID)
+
+		}
+		wg.Done()
+	}
+}
+
+func processAllCachedBatches(lastBatch bool) {
 	if common.IS_DEBUG {
 		fmt.Println("processing")
 	}
 	var sendNum uint64 = 0
 
 	for tmpBatchNo, _ := range tmpBatchQueue {
+		// var t, _ = BackendBatchQueue.Load(tmpBatchNo)
+		// var num = t.(*uint32)
+		var t, _ = BackendBatchQueue.Load(tmpBatchNo)
+		var num = t.(int)
 
-		var num, _ = BackendBatchQueue.Load(tmpBatchNo)
 		if common.IS_DEBUG {
 			fmt.Println("tmpBatchQueue[", tmpBatchNo, "] - BackendBatchQueue[", tmpBatchNo, "]: ", num)
 		}
-		// fmt.Println("num.(int) > len(clientHosts):", num.(int) > len(clientHosts), ", len(tmpBatchQueue)%BATCH_GATE: ", len(tmpBatchQueue)%BATCH_GATE)
-		if noControl || (num.(int) >= len(clientHosts) && len(tmpBatchQueue) >= BATCH_GATE) {
+
+		if lastBatch || (num >= len(common.ClientHosts) && len(tmpBatchQueue) >= BATCH_GATE) {
 			BackendTraceIDQueue.Range(func(k, v interface{}) bool {
 				batchNo := v.(int)
 
 				if tmpBatchNo == batchNo {
 					traceID := k.(string)
 
-					var wgHostData sync.WaitGroup
-					for i, url := range clientHosts {
-						wgHostData.Add(1)
-						atomic.AddUint64(&sendNum, 1)
-						go getWrongTraceInfo(url+"/getWrongTrace", traceID, i, &wgHostData)
-					}
-					// Ensure all the clients return data back
-					wgHostData.Wait()
+					atomic.AddUint64(&sendNum, uint64(len(common.ClientHosts)))
+					common.ServerSendWSChan <- traceID
 
-					// get the records from the above request calls and join them together
-					newInfoArr := []string{}
-					traceInfoCache := common.GetTraceInfo(traceID)
-					for i, _ := range clientHosts {
-						traceInfo := common.GetTraceInfo(traceID + "-" + strconv.Itoa(i))
-						newInfoArr = append(newInfoArr, traceInfo.Records...)
-					}
-					traceInfoCache.Records = append(traceInfoCache.Records, newInfoArr...)
-
-					if traceInfoCache != nil && len(traceInfoCache.Records) > 0 {
-						// sort
-						traceInfoCache.SortRecords()
-						if common.IS_DEBUG && traceID == common.DEBUG_TRACE_ID {
-							fmt.Println(traceInfoCache)
-						}
-						// generate checkSum to result queue
-						tmpCheckSumQueue[traceID] = traceInfoCache
-						common.GenCheckSumToQueueChan <- traceID
-					}
-
-					for i, _ := range clientHosts {
-						common.CacheQueue.Delete(traceID + "-" + strconv.Itoa(i))
-					}
-					common.CacheQueue.Delete(traceID)
 					BackendTraceIDQueue.Delete(k)
 					BackendBatchQueue.Delete(v.(int))
 					tmpBatchQueue[v.(int)] = true
@@ -169,32 +157,7 @@ func processAllCachedBatches(noControl bool) {
 			delete(tmpBatchQueue, k)
 		}
 	}
-	// Request all the clients to get all the bad trace info
-}
-
-func getWrongTraceInfo(URL string, traceID string, id int, wgHostData *sync.WaitGroup) {
-	tmpChan <- struct{}{}
-	url := URL + "/" + traceID
-	res, err := http.Get(url)
-	if err != nil {
-		log.Fatal(err)
+	if lastBatch {
+		close(common.GenCheckSumToQueueChan)
 	}
-	defer res.Body.Close()
-
-	var traceInfo common.RecordTemplate
-	err = json.NewDecoder(res.Body).Decode(&traceInfo)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	// Push into the cache server
-	if common.IS_DEBUG && traceID == common.DEBUG_TRACE_ID {
-		fmt.Println("-----traceInfo start----")
-		fmt.Println(traceInfo.Records)
-		fmt.Println("-----traceInfo end----")
-	}
-	if len(traceInfo.Records) > 0 {
-		common.SetTraceInfo(traceID+"-"+strconv.Itoa(id), &traceInfo)
-	}
-	wgHostData.Done()
-	<-tmpChan
 }

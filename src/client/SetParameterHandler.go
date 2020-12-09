@@ -2,7 +2,6 @@ package client
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"tail-based-sampling/src/common"
@@ -51,6 +50,8 @@ func SetParameterGetHandler(c *fiber.Ctx) error {
 	if serverPort != "8002" && !isRunning {
 		isRunning = true
 		url := getURL(port)
+
+		go wsConnection()
 
 		go windowing()
 
@@ -106,11 +107,12 @@ func fetchData(url string) {
 
 func getURL(port string) string {
 	var url string
+	port = "8080"
 	switch currentServerPort := common.GetEnvDefault("SERVER_PORT", ""); currentServerPort {
 	case "8000":
-		url = fmt.Sprintf("http://localhost:%v/trace1.data", port)
+		url = fmt.Sprintf("http://localhost:%v/trace1-4G.data", port)
 	case "8001":
-		url = fmt.Sprintf("http://localhost:%v/trace2.data", port)
+		url = fmt.Sprintf("http://localhost:%v/trace2-4G.data", port)
 	default:
 		url = ""
 	}
@@ -119,20 +121,18 @@ func getURL(port string) string {
 }
 
 func postFinishSignal() {
-	type finishSignalTemplate struct {
-		Port string
-	}
+	// res, err := http.Post("http://localhost:8002/finish", "application/json", bytes.NewBuffer(mjson))
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	// defer res.Body.Close()
+	var payload = new(common.Payload)
+	payload.SendFinishGen(common.GetEnvDefault("SERVER_PORT", "8002"))
 
-	mjson, err := json.Marshal(finishSignalTemplate{
-		Port: common.GetEnvDefault("SERVER_PORT", "8002"),
-	})
+	msg, _ := json.Marshal(payload)
+
+	_, err := ws.Write(msg)
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	res, err := http.Post("http://localhost:8002/finish", "application/json", bytes.NewBuffer(mjson))
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer res.Body.Close()
 }
