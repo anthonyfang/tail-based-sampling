@@ -10,14 +10,11 @@ import (
 )
 
 const (
-	MAX_CONCURRENCY = 20
-	BATCH_GATE      = 4
+	BATCH_GATE = 4
 )
 
 var batchReceivedCount = 0
 var finishSignals = 0
-
-var tmpChan = make(chan struct{}, MAX_CONCURRENCY)
 
 var tmpBatchQueue = make(map[int]bool)
 var tmpCheckSumQueue = make(map[string]*common.RecordTemplate)
@@ -39,7 +36,6 @@ func processing() {
 			// atomic.AddUint32(ptNum, 1)
 			var x, ok = BackendBatchQueue.Load(batchNo)
 			var num = 1
-
 			if ok {
 				num = x.(int) + 1
 			}
