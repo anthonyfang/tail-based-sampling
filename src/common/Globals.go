@@ -51,7 +51,7 @@ type NewLine struct {
 
 var CacheChan = make(chan string, 1)
 
-var NewLineChan = make(chan NewLine, 200000)
+var NewLineChan = make(chan NewLine, 2000000)
 
 // PostTraceChan is a channel for sending/receiving the signal
 var PostTraceChan = make(chan string)
@@ -61,8 +61,6 @@ var PostTraceChan = make(chan string)
 var BackendChan = make(chan string)
 
 var BatchReceivedCountChan = make(chan int, 10)
-
-var GenCheckSumToQueueChan = make(chan string)
 
 // ------------ Common ----------------- //
 var FinishedChan = make(chan string)

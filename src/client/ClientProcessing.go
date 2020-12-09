@@ -28,26 +28,8 @@ func processing() {
 	fmt.Println("Running Readline process...")
 	for newline := range common.NewLineChan {
 		pushToCache(newline.Line, newline.BatchNo)
-	}
-	common.FinishedChan <- "readline"
-}
 
-func windowing() {
-	fmt.Println("Running Windowing process...")
-	for val := range TimeChan { // tigger time window
-		rollOver := false
-		if timeWindowStart == 0 {
-			timeWindowStart = val
-			timeWindowEnd = timeWindowStart + int64(TIME_WINDOW*1000000)
-		} else {
-			if val > timeWindowEnd {
-				rollOver = true
-				timeWindowStart = val + int64(ROLLING*1000000)
-				timeWindowEnd = timeWindowStart + int64(TIME_WINDOW*1000000)
-			}
-		}
-
-		if rollOver {
+		if counter%20000 == 0 {
 			common.Wg.Add(1)
 			postTraceIDs(int(batchNo))
 			atomic.AddInt32(&batchNo, 1)
@@ -76,6 +58,65 @@ func windowing() {
 			// fmt.Println("batchNo: ", batchNo)
 		}
 	}
+	common.FinishedChan <- "readline"
+
+	common.Wg.Wait()
+
+	common.Wg.Add(1)
+	postTraceIDs(int(batchNo))
+	common.Wg.Wait()
+	common.FinishedChan <- "timeWindow"
+}
+
+func windowing() {
+	fmt.Println("Running Windowing process...")
+	for val := range TimeChan {
+		if 0 == val {
+		}
+
+	}
+	// for val := range TimeChan { // tigger time window
+	// 	rollOver := false
+	// 	if timeWindowStart == 0 {
+	// 		timeWindowStart = val
+	// 		timeWindowEnd = timeWindowStart + int64(TIME_WINDOW*1000000)
+	// 	} else {
+	// 		if val > timeWindowEnd {
+	// 			rollOver = true
+	// 			timeWindowStart = val + int64(ROLLING*1000000)
+	// 			timeWindowEnd = timeWindowStart + int64(TIME_WINDOW*1000000)
+	// 		}
+	// 	}
+
+	// 	if rollOver {
+	// 		common.Wg.Add(1)
+	// 		postTraceIDs(int(batchNo))
+	// 		atomic.AddInt32(&batchNo, 1)
+
+	// 		go func() {
+	// 			if batchNo%10 == 0 {
+	// 				common.CacheQueue.Range(func(k, v interface{}) bool {
+	// 					if len(k.(string)) > 8 {
+	// 						traceInfo := v.(*common.RecordTemplate)
+	// 						if traceInfo.LifeTime > BATCH_GATE {
+	// 							common.CacheQueue.Delete(k)
+	// 						} else {
+	// 							traceInfo.LifeTime++
+	// 						}
+	// 					} else {
+	// 						num := k.(string)
+	// 						numInt, _ := strconv.Atoi(num)
+	// 						if numInt < int(batchNo)-BATCH_GATE*5 {
+	// 							common.CacheQueue.Delete(k)
+	// 						}
+	// 					}
+	// 					return true
+	// 				})
+	// 			}
+	// 		}()
+	// 		// fmt.Println("batchNo: ", batchNo)
+	// 	}
+	// }
 	common.Wg.Wait()
 
 	common.Wg.Add(1)
@@ -87,32 +128,31 @@ func windowing() {
 func postTraceIDs(batchNo int) {
 	var badListLocker = sync.Mutex{}
 
-	if common.IS_DEBUG {
-		fmt.Println("triggered send IDs, current count: ", counter)
-	}
-	go func(batchNo int) {
-		badListLocker.Lock()
-		badTraceIDList := common.BadTraceIDList
-		common.BadTraceIDList = []string{}
+	// go func(batchNo int) {
+	badListLocker.Lock()
+	badTraceIDList := common.BadTraceIDList
+	common.BadTraceIDList = []string{}
 
-		common.CacheQueue.Store(strconv.Itoa(batchNo), badTraceIDList)
+	common.CacheQueue.Store(strconv.Itoa(batchNo), badTraceIDList)
 
-		if batchNo > 1 {
-			var payload = new(common.Payload)
-			previousBatch := batchNo - 1
-			badTraceIDs, _ := common.CacheQueue.Load(strconv.Itoa(previousBatch))
+	if batchNo > 1 {
+		var payload = new(common.Payload)
+		previousBatch := batchNo - 1
+		badTraceIDs, _ := common.CacheQueue.Load(strconv.Itoa(previousBatch))
 
-			payload.SetWrongTraceIDGen(strconv.Itoa(previousBatch), badTraceIDs.([]string))
-			msg, _ := json.Marshal(payload)
-			_, err := ws1.Write(msg)
-			if err != nil {
-				log.Fatal(err)
-			}
+		if common.IS_DEBUG {
+			fmt.Println("triggered send IDs batch", previousBatch, " current count:", counter)
 		}
-		badTraceIDList = []string{}
-		badListLocker.Unlock()
-		common.Wg.Done()
-	}(batchNo)
+		payload.SetWrongTraceIDGen(strconv.Itoa(previousBatch), badTraceIDs.([]string))
+		msg, _ := json.Marshal(payload)
+		_, err := ws1.Write(msg)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+	badTraceIDList = []string{}
+	badListLocker.Unlock()
+	common.Wg.Done()
 }
 
 func pushToCache(recordString string, batchNo int) {
@@ -157,7 +197,7 @@ func pushToCache(recordString string, batchNo int) {
 			common.BadTraceIDList = append(common.BadTraceIDList, traceID)
 		}
 
-		TimeChan <- currentTime
+		// TimeChan <- currentTime
 	}
 }
 

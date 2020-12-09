@@ -15,6 +15,7 @@ func SetParameterGetHandler(c *fiber.Ctx) error {
 
 	go processing()
 
+	// time.Sleep(time.Second * 5)
 	return c.SendString("OK!")
 }
 

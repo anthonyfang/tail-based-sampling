@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
+	"strconv"
+	"sync"
 	"tail-based-sampling/src/common"
 	"time"
 
@@ -51,19 +54,83 @@ func SetParameterGetHandler(c *fiber.Ctx) error {
 	return c.SendString(fmt.Sprintf("OK! Upload server port is: %v", port))
 }
 
+// DownloadFile is download file with Range header
+func MultiPartsDownload(url string) {
+	startTime := time.Now()
+	fmt.Println("################# : fetchingData", startTime)
+	res, _ := http.Head(url)
+	maps := res.Header
+	length, _ := strconv.Atoi(maps["Content-Length"][0])
+	limit := 2
+	lenSub := length / limit
+	diff := length % limit
+
+	var wg sync.WaitGroup
+
+	for i := 0; i < limit; i++ {
+		wg.Add(1)
+		min := lenSub * i       // Min range
+		max := lenSub * (i + 1) // Max range
+
+		if i == limit-1 {
+			max += diff // Add the remaining bytes in the last request
+		}
+
+		go func(min int, max int, i int) {
+			client := &http.Client{}
+			req, _ := http.NewRequest("GET", url, nil)
+			rangeHeader := "bytes=" + strconv.Itoa(min) + "-" + strconv.Itoa(max-1) // Add the data for the Range header of the form "bytes=0-100"
+			req.Header.Add("Range", rangeHeader)
+			resp, _ := client.Do(req)
+			defer func() { resp.Body.Close() }()
+
+			scanner := bufio.NewScanner(resp.Body)
+			buf := make([]byte, 64*1024)
+			scanner.Buffer(buf, bufio.MaxScanTokenSize)
+
+			for scanner.Scan() {
+				recordString := scanner.Text()
+				common.NewLineChan <- common.NewLine{Line: recordString, BatchNo: 0}
+				time.Sleep(300)
+			}
+			defer func() {
+				wg.Done()
+			}()
+		}(min, max, i)
+	}
+	wg.Wait()
+
+	close(common.NewLineChan)
+	for msg := range common.FinishedChan {
+		// if msg == "readline" {
+		// 	TimeChan <- timeWindowEnd + 1
+		// 	common.Wg.Wait()
+		// 	close(TimeChan)
+		// }
+
+		if msg == "timeWindow" {
+			fmt.Println("xxxxxxxxxxxxxxxxxx: pushed ", counter)
+			go postFinishSignal()
+
+			fmt.Println("################# : fetchingData END", time.Now())
+			fmt.Println("################# : fetchingData Total Elapsed Time: ", time.Since(startTime))
+			// return
+		}
+	}
+}
+
 func startClientProcess(port string) {
 	url := getURL(port)
-	fmt.Println("Start download...")
-	if url != "" {
-		DownloadFile(url)
-	}
-	fmt.Println("Finished download to /tmp/datafile")
 
-	go windowing()
+	// go windowing()
 
 	go processing()
 
-	go readData()
+	if url != "" {
+		fmt.Println("Start download...")
+		MultiPartsDownload(url)
+	}
+	// go readData()
 }
 
 func readData() {

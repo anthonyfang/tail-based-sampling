@@ -18,9 +18,9 @@ type WsConn struct {
 }
 
 func (p *WsConn) send(mt int, msg []byte) error {
-	//p.Mux.Lock()
+	p.Mux.Lock()
 	err := p.Conn.WriteMessage(mt, msg)
-	//p.Mux.Unlock()
+	p.Mux.Unlock()
 	return err
 }
 

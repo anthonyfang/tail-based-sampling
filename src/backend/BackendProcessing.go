@@ -103,7 +103,6 @@ func agregateForTraceID() {
 				// generate checkSum to result queue
 				tmpCheckSumQueue[traceID] = traceInfoCache
 				tmpCheckSumQueue[traceID].GenCheckSumToQueue(traceID, resultQueue)
-				// common.GenCheckSumToQueueChan <- traceID
 			}
 			for i, _ := range common.ClientHosts {
 				common.CacheQueue.Delete(traceID + "-" + strconv.Itoa(i))
@@ -159,7 +158,5 @@ func processAllCachedBatches(lastBatch bool) {
 			delete(tmpBatchQueue, k)
 		}
 	}
-	if lastBatch {
-		close(common.GenCheckSumToQueueChan)
-	}
+
 }
