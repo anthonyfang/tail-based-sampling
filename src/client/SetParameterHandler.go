@@ -15,6 +15,7 @@ import (
 
 var isRunning = false
 var counter uint64 = 0
+var downloadChan = make(chan bool)
 
 // SetParameterPostHandler is use for handling the SetParameterHandler endpoint
 func SetParameterPostHandler(c *fiber.Ctx) error {
@@ -46,11 +47,16 @@ func SetParameterGetHandler(c *fiber.Ctx) error {
 		isRunning = true
 		url := getURL(port)
 
+		if url != "" {
+			go DownloadFile(url)
+		}
+
 		go windowing()
 
 		go processing()
 
-		go fetchData(url)
+		// go fetchData(url)
+		go readData(url)
 	}
 
 	return c.SendString(fmt.Sprintf("OK! Upload server port is: %v", port))
@@ -92,6 +98,45 @@ func fetchData(url string) {
 				fmt.Println("################# : fetchingData Total Elapsed Time: ", time.Since(startTime))
 				// return
 			}
+		}
+	}
+}
+
+// fetchData is use for fetching the data file from datasource server
+func readData(url string) {
+	startTime := time.Now()
+	fmt.Println("################# : fetchingData", startTime)
+
+	<-downloadChan
+
+	file, err := os.Open("/tmp/datafile")
+ 
+	if err != nil {
+		fmt.Println("cannot able to read the file", err)
+		return
+	}
+
+	defer func ()  {
+		file.Close()
+	}()
+
+	process(file)
+	close(common.NewLineChan)
+
+	for msg := range common.FinishedChan {
+		if msg == "readline" {
+			TimeChan <- timeWindowEnd + 1
+			close(TimeChan)
+		}
+
+		if msg == "timeWindow" {
+			fmt.Println("xxxxxxxxxxxxxxxxxx: pushed ", counter)
+			go postFinishSignal()
+
+			fmt.Println("################# : fetchingData END", time.Now())
+			fmt.Println("################# : fetchingData Total Elapsed Time: ", time.Since(startTime))
+
+			// return
 		}
 	}
 }
