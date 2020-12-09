@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"tail-based-sampling/src/common"
 	"time"
@@ -45,87 +44,55 @@ func SetParameterGetHandler(c *fiber.Ctx) error {
 
 	if serverPort != "8002" && !isRunning {
 		isRunning = true
-		url := getURL(port)
-
-		if url != "" {
-			go DownloadFile(url)
-		}
-
-		go windowing()
-
-		go processing()
-
-		// go fetchData(url)
-		go readData(url)
+		go startClientProcess(port)
+		// // go fetchData(url)
 	}
 
 	return c.SendString(fmt.Sprintf("OK! Upload server port is: %v", port))
 }
 
-// fetchData is use for fetching the data file from datasource server
-func fetchData(url string) {
-	startTime := time.Now()
-	fmt.Println("################# : fetchingData", startTime)
+func startClientProcess(port string) {
+	url := getURL(port)
+	fmt.Println("Start download...")
 	if url != "" {
-		resp, err := http.Get(url)
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-		defer resp.Body.Close()
-		scanner := bufio.NewScanner(resp.Body)
-		buf := make([]byte, 64*1024)
-		scanner.Buffer(buf, bufio.MaxScanTokenSize)
-
-		for scanner.Scan() {
-			recordString := scanner.Text()
-			common.NewLineChan <- common.NewLine{Line: recordString, BatchNo: int(batchNo)}
-		}
-
-		close(common.NewLineChan)
-		for msg := range common.FinishedChan {
-			if msg == "readline" {
-				TimeChan <- timeWindowEnd + 1
-				common.Wg.Wait()
-				close(TimeChan)
-			}
-
-			if msg == "timeWindow" {
-				fmt.Println("xxxxxxxxxxxxxxxxxx: pushed ", counter)
-				go postFinishSignal()
-
-				fmt.Println("################# : fetchingData END", time.Now())
-				fmt.Println("################# : fetchingData Total Elapsed Time: ", time.Since(startTime))
-				// return
-			}
-		}
+		DownloadFile(url)
 	}
+	fmt.Println("Finished download to /tmp/datafile")
+
+	go windowing()
+
+	go processing()
+
+	go readData()
 }
 
-// fetchData is use for fetching the data file from datasource server
-func readData(url string) {
+func readData() {
+	fmt.Println("Start to read file")
 	startTime := time.Now()
 	fmt.Println("################# : fetchingData", startTime)
 
-	<-downloadChan
-
 	file, err := os.Open("/tmp/datafile")
- 
+
 	if err != nil {
-		fmt.Println("cannot able to read the file", err)
-		return
+		log.Fatalf("failed opening file: %s", err)
 	}
 
-	defer func ()  {
-		file.Close()
-	}()
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	buf := make([]byte, 64*1024)
+	scanner.Buffer(buf, bufio.MaxScanTokenSize)
+	//scanner.Split(bufio.ScanLines)
 
-	process(file)
+	for scanner.Scan() {
+		recordString := scanner.Text()
+		common.NewLineChan <- common.NewLine{Line: recordString, BatchNo: 0}
+	}
+
 	close(common.NewLineChan)
-
 	for msg := range common.FinishedChan {
 		if msg == "readline" {
 			TimeChan <- timeWindowEnd + 1
+			common.Wg.Wait()
 			close(TimeChan)
 		}
 
@@ -135,10 +102,64 @@ func readData(url string) {
 
 			fmt.Println("################# : fetchingData END", time.Now())
 			fmt.Println("################# : fetchingData Total Elapsed Time: ", time.Since(startTime))
-
 			// return
 		}
 	}
+}
+
+// fetchData is use for fetching the data file from datasource server
+// func fetchData(url string) {
+// 	startTime := time.Now()
+// 	fmt.Println("################# : fetchingData", startTime)
+// 	if url != "" {
+// 		resp, err := http.Get(url)
+// 		if err != nil {
+// 			log.Fatalln(err)
+// 		}
+
+// 		defer resp.Body.Close()
+// 		scanner := bufio.NewScanner(resp.Body)
+// 		buf := make([]byte, 64*1024)
+// 		scanner.Buffer(buf, bufio.MaxScanTokenSize)
+
+// 		for scanner.Scan() {
+// 			recordString := scanner.Text()
+// 			common.NewLineChan <- common.NewLine{Line: recordString, BatchNo: int(batchNo)}
+// 		}
+
+// 		close(common.NewLineChan)
+// 		for msg := range common.FinishedChan {
+// 			if msg == "readline" {
+// 				TimeChan <- timeWindowEnd + 1
+// 				common.Wg.Wait()
+// 				close(TimeChan)
+// 			}
+
+// 			if msg == "timeWindow" {
+// 				fmt.Println("xxxxxxxxxxxxxxxxxx: pushed ", counter)
+// 				go postFinishSignal()
+
+// 				fmt.Println("################# : fetchingData END", time.Now())
+// 				fmt.Println("################# : fetchingData Total Elapsed Time: ", time.Since(startTime))
+// 				// return
+// 			}
+// 		}
+// 	}
+// }
+
+func readLines(path string) ([]string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var lines []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+	return lines, scanner.Err()
 }
 
 func getURL(port string) string {
