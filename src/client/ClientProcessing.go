@@ -14,7 +14,7 @@ import (
 const (
 	TIME_WINDOW = 0.05
 	ROLLING     = 0.05
-	BATCH_GATE  = 3
+	BATCH_GATE  = 25
 )
 
 var batchNo int32 = 1
