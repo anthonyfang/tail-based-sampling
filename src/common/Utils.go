@@ -8,12 +8,6 @@ import (
 	"strings"
 )
 
-const (
-	IS_DEBUG       = true
-	DEBUG_TRACE_ID = "x"
-	IS_PRINTOUT    = true
-)
-
 // GetEnvDefault is using for getting enviroment variable with default value
 func GetEnvDefault(key string, defVal string) string {
 	val, ex := os.LookupEnv(key)

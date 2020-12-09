@@ -22,7 +22,7 @@ var CacheQueue = sync.Map{}
 // BadTraceIDList is recording down the bad trace IDs
 var BadTraceIDList = []string{}
 
-var wg sync.WaitGroup
+var Wg sync.WaitGroup
 
 // BadTraceList is a list record down the bad trace
 var BadTraceList = make(map[string]*RecordTemplate)

@@ -9,13 +9,12 @@ import (
 	"sync"
 	"sync/atomic"
 	"tail-based-sampling/src/common"
-	"time"
 )
 
 const (
 	TIME_WINDOW = 0.05
 	ROLLING     = 0.05
-	BATCH_GATE  = 35
+	BATCH_GATE  = 3
 )
 
 var batchNo int32 = 1
@@ -49,33 +48,39 @@ func windowing() {
 		}
 
 		if rollOver {
+			common.Wg.Add(1)
 			postTraceIDs(int(batchNo))
 			atomic.AddInt32(&batchNo, 1)
 
 			go func() {
-				common.CacheQueue.Range(func(k, v interface{}) bool {
-					if len(k.(string)) > 8 {
-						traceInfo := v.(*common.RecordTemplate)
-						if traceInfo.LifeTime > BATCH_GATE {
-							common.CacheQueue.Delete(k)
+				if batchNo%10 == 0 {
+					common.CacheQueue.Range(func(k, v interface{}) bool {
+						if len(k.(string)) > 8 {
+							traceInfo := v.(*common.RecordTemplate)
+							if traceInfo.LifeTime > BATCH_GATE {
+								common.CacheQueue.Delete(k)
+							} else {
+								traceInfo.LifeTime++
+							}
 						} else {
-							traceInfo.LifeTime++
+							num := k.(string)
+							numInt, _ := strconv.Atoi(num)
+							if numInt < int(batchNo)-BATCH_GATE*5 {
+								common.CacheQueue.Delete(k)
+							}
 						}
-					} else {
-						num := k.(string)
-						numInt, _ := strconv.Atoi(num)
-						if numInt < int(batchNo)-BATCH_GATE {
-							common.CacheQueue.Delete(k)
-						}
-					}
-					return true
-				})
+						return true
+					})
+				}
 			}()
 			// fmt.Println("batchNo: ", batchNo)
 		}
 	}
-	// postTraceIDs(int(batchNo))
-	time.Sleep(time.Millisecond * 100)
+	common.Wg.Wait()
+
+	common.Wg.Add(1)
+	postTraceIDs(int(batchNo))
+	common.Wg.Wait()
 	common.FinishedChan <- "timeWindow"
 }
 
@@ -98,9 +103,7 @@ func postTraceIDs(batchNo int) {
 			badTraceIDs, _ := common.CacheQueue.Load(strconv.Itoa(previousBatch))
 
 			payload.SetWrongTraceIDGen(strconv.Itoa(previousBatch), badTraceIDs.([]string))
-
 			msg, _ := json.Marshal(payload)
-
 			_, err := ws1.Write(msg)
 			if err != nil {
 				log.Fatal(err)
@@ -108,6 +111,7 @@ func postTraceIDs(batchNo int) {
 		}
 		badTraceIDList = []string{}
 		badListLocker.Unlock()
+		common.Wg.Done()
 	}(batchNo)
 }
 
@@ -150,7 +154,7 @@ func pushToCache(recordString string, batchNo int) {
 		atomic.AddUint64(&counter, 1)
 
 		if hasError {
-			go func() { common.BadTraceIDList = append(common.BadTraceIDList, traceID) }()
+			common.BadTraceIDList = append(common.BadTraceIDList, traceID)
 		}
 
 		TimeChan <- currentTime

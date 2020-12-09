@@ -126,7 +126,6 @@ func wsWriteLoop() {
 
 func processWrongTraceID(ws *websocket.Conn, batchNo int, records []string) {
 	for _, v := range records {
-		// fmt.Println(v)
 		BackendTraceIDQueue.Store(v, batchNo)
 	}
 

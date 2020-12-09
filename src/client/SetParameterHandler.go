@@ -4,16 +4,11 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"tail-based-sampling/src/common"
-
-	// "io"
 	"log"
 	"net/http"
 	"os"
+	"tail-based-sampling/src/common"
 	"time"
-
-	// "sync"
-	// "math"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -85,6 +80,7 @@ func fetchData(url string) {
 		for msg := range common.FinishedChan {
 			if msg == "readline" {
 				TimeChan <- timeWindowEnd + 1
+				common.Wg.Wait()
 				close(TimeChan)
 			}
 
@@ -94,7 +90,6 @@ func fetchData(url string) {
 
 				fmt.Println("################# : fetchingData END", time.Now())
 				fmt.Println("################# : fetchingData Total Elapsed Time: ", time.Since(startTime))
-
 				// return
 			}
 		}

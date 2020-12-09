@@ -1,5 +1,11 @@
 package common
 
+const (
+	IS_DEBUG       = true
+	DEBUG_TRACE_ID = "x"
+	IS_PRINTOUT    = true
+)
+
 //var clientHosts = []string{"http://localhost:8000"}
 var ClientHosts = []string{"http://localhost:8000", "http://localhost:8001"}
 var BackendHosts = []string{"http://localhost:8002"}
