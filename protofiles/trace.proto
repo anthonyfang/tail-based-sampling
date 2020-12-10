@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+option go_package = ".;trace";
+
+// import "google/protobuf/empty.proto";
+
+package trace;
+
+message PayloadMessage {
+    string Action =1;
+    string ID = 2;
+	repeated string Records = 3;
+}
+
+message Response {
+    string Body=1;
+}
+
+service TraceService {
+    rpc SetWrongTraceID(PayloadMessage) returns (Response) {}
+    rpc FindTraceInfo(PayloadMessage) returns (PayloadMessage) {}
+}

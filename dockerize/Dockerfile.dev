@@ -1,5 +1,8 @@
 FROM golang:alpine
 
+ENV GO111MODULE on
+ENV GOPROXY https://goproxy.cn
+
 WORKDIR /tail-based-sampling
 # ENV ALL_PROXY http://172.217.27.145:1080
 # RUN echo http://mirror.yandex.ru/mirrors/alpine/v3.12/main > /etc/apk/repositories; \
@@ -14,8 +17,25 @@ RUN cat /etc/resolv.conf && \
 RUN apk update && \
     apk add --no-cache bash git curl && \
     ifconfig && \
-    export GO111MODULE=on && \
-    export GOPROXY=https://goproxy.cn && \
-    go get github.com/gofiber/fiber/v2
+    go get github.com/gin-gonic/gin; \
+    go get github.com/golang/protobuf; \
+    go get github.com/gorilla/websocket; \
+    go get github.com/soheilhy/cmux; \
+    go get golang.org/x/net; \
+    go get google.golang.org/grpc; \
+    go get gopkg.in/yaml.v2; \
+    go get google.golang.org/genproto; \
+    go get github.com/gorilla/websocket; \
+    go get github.com/gin-contrib/sse; \
+    go get golang.org/x/text; \
+    go get github.com/mattn/go-isatty; \
+    go get golang.org/x/sys; \
+    go get github.com/go-playground/validator/v10; \
+    go get github.com/ugorji/go; \
+    go get github.com/ugorji/go/codec; \
+    go get github.com/go-playground/universal-translator; \
+    go get github.com/leodido/go-urn; \
+    go get github.com/go-playground/locales
+
 
 CMD ["bash"]

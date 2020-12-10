@@ -2,42 +2,48 @@ package client
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"tail-based-sampling/src/common"
+	"tail-based-sampling/src/trace"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gin-gonic/gin"
+	"github.com/golang/protobuf/proto"
 )
 
 var isRunning = false
 var counter uint64 = 0
 
 // SetParameterPostHandler is use for handling the SetParameterHandler endpoint
-func SetParameterPostHandler(c *fiber.Ctx) error {
+func SetParameterPostHandler(ctx *gin.Context) {
 	type Request struct {
 		Port string `json:"port"`
 	}
 	var body Request
 
-	err := c.BodyParser(&body)
+	err := ctx.BindJSON(&body)
 	if err != nil {
-		fmt.Println(err)
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"message": "Cannot parse Body JSON",
-		})
+		fmt.Println(err.Error())
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Cannot parse Body JSON"})
 	}
+	fmt.Printf("info: %#v\n", body)
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"code": 200,
+		"msg":  "success",
+	})
+
 	os.Setenv("UPLOAD_SERVER_PORT", body.Port)
 
-	return c.SendString(fmt.Sprintf("Please use Get Request! Upload server port is: %v", body.Port))
+	ctx.String(200, "Please use Get Request! Upload server port is: %v", body.Port)
 }
 
 // SetParameterGetHandler is use for handling the SetParameterHandler endpoint
-func SetParameterGetHandler(c *fiber.Ctx) error {
-	port := c.Query("port")
+func SetParameterGetHandler(ctx *gin.Context) {
+	port := ctx.Query("port")
 
 	os.Setenv("UPLOAD_SERVER_PORT", port)
 	serverPort := common.GetEnvDefault("SERVER_PORT", "8002")
@@ -48,12 +54,15 @@ func SetParameterGetHandler(c *fiber.Ctx) error {
 
 		go windowing()
 
+		// gRPCconnect()
+
+		// fmt.Println(url)
 		go processing()
 
 		go fetchData(url)
 	}
 
-	return c.SendString(fmt.Sprintf("OK! Upload server port is: %v", port))
+	ctx.String(200, "Upload server port is: %v", port)
 }
 
 // fetchData is use for fetching the data file from datasource server
@@ -112,12 +121,18 @@ func getURL(port string) string {
 }
 
 func postFinishSignal() {
-	var payload = new(common.Payload)
-	payload.SendFinishGen(common.GetEnvDefault("SERVER_PORT", "8002"))
+	// var payload = new(common.Payload)
+	// payload.SendFinishGen(common.GetEnvDefault("SERVER_PORT", "8002"))
 
-	msg, _ := json.Marshal(payload)
+	// msg, _ := json.Marshal(payload)
 
-	_, err := ws1.Write(msg)
+	payload := &trace.PayloadMessage{
+		Action:  "SendFinished",
+		ID:      "0",
+		Records: []string{},
+	}
+	msg, err := proto.Marshal(payload)
+	_, err = ws1.Write(msg)
 	if err != nil {
 		log.Fatal(err)
 	}

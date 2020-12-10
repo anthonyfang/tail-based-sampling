@@ -1,7 +1,6 @@
 package client
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"strconv"
@@ -9,6 +8,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"tail-based-sampling/src/common"
+	"tail-based-sampling/src/trace"
+
+	"github.com/golang/protobuf/proto"
 )
 
 const (
@@ -98,15 +100,31 @@ func postTraceIDs(batchNo int) {
 		common.CacheQueue.Store(strconv.Itoa(batchNo), badTraceIDList)
 
 		if batchNo > 1 {
-			var payload = new(common.Payload)
+			// var payload = new(common.Payload)
 			previousBatch := batchNo - 1
 			badTraceIDs, _ := common.CacheQueue.Load(strconv.Itoa(previousBatch))
 
-			payload.SetWrongTraceIDGen(strconv.Itoa(previousBatch), badTraceIDs.([]string))
-			msg, _ := json.Marshal(payload)
-			_, err := ws1.Write(msg)
+			// payload.SetWrongTraceIDGen(strconv.Itoa(previousBatch), badTraceIDs.([]string))
+
+			payload := &trace.PayloadMessage{
+				Action:  "SetWrongTraceID",
+				ID:      strconv.Itoa(previousBatch),
+				Records: badTraceIDs.([]string),
+			}
+			// payload.ReturnWrongTraceGen(traceID, payload)
+
+			// msg, _ := json.Marshal(payload)
+
+			msg, err := proto.Marshal(payload)
+			if err != nil {
+				log.Fatal("marshaling error: ", err)
+			}
+
+			// msg, _ := json.Marshal(payload)
+			_, err = ws1.Write(msg)
 			if err != nil {
 				log.Fatal(err)
+
 			}
 		}
 		badTraceIDList = []string{}

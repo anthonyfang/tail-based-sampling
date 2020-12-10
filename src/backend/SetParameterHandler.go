@@ -3,22 +3,22 @@ package backend
 import (
 	"os"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gin-gonic/gin"
 )
 
 // SetWrongTraceIDHandler is use for handle the setWrongTraceId endpoint
-func SetParameterGetHandler(c *fiber.Ctx) error {
+func SetParameterGetHandler(ctx *gin.Context) {
 
-	port := c.Query("port")
+	port := ctx.Query("port")
 
 	os.Setenv("UPLOAD_SERVER_PORT", port)
 
 	go processing()
 
-	return c.SendString("OK!")
+	ctx.String(200, "OK!")
 }
 
-func SetParameterPostHandler(c *fiber.Ctx) error {
+func SetParameterPostHandler(ctx *gin.Context) {
 
-	return c.SendString("Please use GET request instead!")
+	ctx.String(200, "Please use GET request instead!")
 }
