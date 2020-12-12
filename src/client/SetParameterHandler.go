@@ -11,11 +11,25 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/golang/protobuf/proto"
 )
 
 var isRunning = false
 var counter uint64 = 0
+
+func getURL(port string) string {
+	var url string
+	port = "8080"
+	switch currentServerPort := common.GetEnvDefault("SERVER_PORT", ""); currentServerPort {
+	case "8000":
+		url = fmt.Sprintf("http://localhost:%v/trace1-4G.data", port)
+	case "8001":
+		url = fmt.Sprintf("http://localhost:%v/trace2-4G.data", port)
+	default:
+		url = ""
+	}
+
+	return url
+}
 
 // SetParameterPostHandler is use for handling the SetParameterHandler endpoint
 func SetParameterPostHandler(ctx *gin.Context) {
@@ -50,16 +64,11 @@ func SetParameterGetHandler(ctx *gin.Context) {
 
 	if serverPort != "8002" && !isRunning {
 		isRunning = true
-		url := getURL(port)
 
-		go windowing()
-
-		// gRPCconnect()
-
-		// fmt.Println(url)
-		go processing()
-
-		go fetchData(url)
+		go func(port string) {
+			time.Sleep(time.Millisecond * 10)
+			common.ReadyChan <- port
+		}(serverPort)
 	}
 
 	ctx.String(200, "Upload server port is: %v", port)
@@ -105,21 +114,6 @@ func fetchData(url string) {
 	}
 }
 
-func getURL(port string) string {
-	var url string
-	// port = "8080"
-	switch currentServerPort := common.GetEnvDefault("SERVER_PORT", ""); currentServerPort {
-	case "8000":
-		url = fmt.Sprintf("http://localhost:%v/trace1.data", port)
-	case "8001":
-		url = fmt.Sprintf("http://localhost:%v/trace2.data", port)
-	default:
-		url = ""
-	}
-
-	return url
-}
-
 func postFinishSignal() {
 	// var payload = new(common.Payload)
 	// payload.SendFinishGen(common.GetEnvDefault("SERVER_PORT", "8002"))
@@ -131,9 +125,7 @@ func postFinishSignal() {
 		ID:      "0",
 		Records: []string{},
 	}
-	msg, err := proto.Marshal(payload)
-	_, err = ws1.Write(msg)
-	if err != nil {
+	if err := (*gRPCstream).Send(payload); err != nil {
 		log.Fatal(err)
 	}
 }

@@ -17,6 +17,7 @@ message Response {
 }
 
 service TraceService {
-    rpc SetWrongTraceID(PayloadMessage) returns (Response) {}
-    rpc FindTraceInfo(PayloadMessage) returns (PayloadMessage) {}
+    // rpc SetWrongTraceID(PayloadMessage) returns (Response) {}
+    // rpc FindTraceInfo(PayloadMessage) returns (PayloadMessage) {}
+    rpc TraceChat(stream PayloadMessage) returns (stream PayloadMessage) {}
 }

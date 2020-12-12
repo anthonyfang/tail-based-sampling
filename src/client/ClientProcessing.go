@@ -9,8 +9,6 @@ import (
 	"sync/atomic"
 	"tail-based-sampling/src/common"
 	"tail-based-sampling/src/trace"
-
-	"github.com/golang/protobuf/proto"
 )
 
 const (
@@ -25,6 +23,20 @@ var timeWindowStart int64 = 0
 var timeWindowEnd int64 = 0
 
 var TimeChan = make(chan int64)
+
+func StartClientProcess() {
+	port := <-common.ReadyChan
+
+	url := getURL("8080")
+	fmt.Println(port)
+
+	go runTraceChat()
+	go windowing()
+	// gRPCconnect()
+	go processing()
+	// time.Sleep(time.Second * 10)
+	fetchData(url)
+}
 
 func processing() {
 	fmt.Println("Running Readline process...")
@@ -111,18 +123,8 @@ func postTraceIDs(batchNo int) {
 				ID:      strconv.Itoa(previousBatch),
 				Records: badTraceIDs.([]string),
 			}
-			// payload.ReturnWrongTraceGen(traceID, payload)
-
 			// msg, _ := json.Marshal(payload)
-
-			msg, err := proto.Marshal(payload)
-			if err != nil {
-				log.Fatal("marshaling error: ", err)
-			}
-
-			// msg, _ := json.Marshal(payload)
-			_, err = ws1.Write(msg)
-			if err != nil {
+			if err := (*gRPCstream).Send(payload); err != nil {
 				log.Fatal(err)
 
 			}

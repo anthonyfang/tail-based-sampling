@@ -12,12 +12,10 @@ import (
 
 	"google.golang.org/grpc"
 
-	"context"
-
 	BackendHandler "tail-based-sampling/src/backend"
-	chat "tail-based-sampling/src/chat"
 	CliendHandler "tail-based-sampling/src/client"
 	Common "tail-based-sampling/src/common"
+	pb "tail-based-sampling/src/trace"
 )
 
 var port string
@@ -43,19 +41,9 @@ func main() {
 	fmt.Println("Server listening: ", port)
 }
 
-type grpcServer struct{}
-
-func (s *grpcServer) SayHello(ctx context.Context, in *chat.Message) (
-	*chat.Message, error) {
-
-	fmt.Printf("request:%v\n", in)
-	// return &chat.Message{Message: "Hello " + in.Name + " from cmux"}, nil
-	return &chat.Message{Body: "Hello From Client!"}, nil
-}
-
 func serveGRPC(l net.Listener) {
 	grpcs := grpc.NewServer()
-	chat.RegisterChatServiceServer(grpcs, &grpcServer{})
+	pb.RegisterTraceServiceServer(grpcs, &BackendHandler.Server{})
 	if err := grpcs.Serve(l); err != cmux.ErrListenerClosed {
 		panic(err)
 	}
@@ -74,11 +62,13 @@ func serveHTTPAndWs(l net.Listener) {
 
 	if port == "8002" {
 		r.GET("/ready", func(c *gin.Context) {
+			go BackendHandler.StartBackendProcess()
 			c.String(200, "Server is running on port: %v", port)
 		})
 	} else {
 		r.GET("/ready", func(c *gin.Context) {
-			go CliendHandler.WsConnection()
+			// go CliendHandler.WsConnection()
+			go CliendHandler.StartClientProcess()
 			c.String(200, "Server is running on port: %v", port)
 		})
 	}

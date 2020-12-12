@@ -3,7 +3,6 @@ package backend
 import (
 	"fmt"
 	"strconv"
-	"strings"
 	"sync/atomic"
 	"tail-based-sampling/src/common"
 	"time"
@@ -19,13 +18,23 @@ var finishSignals = 0
 var tmpBatchQueue = make(map[int]bool)
 var tmpCheckSumQueue = make(map[string]*common.RecordTemplate)
 
+func StartBackendProcess() {
+	port := <-common.ReadyChan
+
+	fmt.Println(port)
+	processing()
+	// processing()
+}
+
 func processing() {
 	fmt.Println("Running Backend process...")
 	defer close(common.FinishedChan)
 
 	go agregateForTraceID()
 
-	go wsWriteLoop()
+	// go wsWriteLoop()
+
+	go gRPCWriteLoop()
 
 	for {
 		select {
@@ -34,12 +43,13 @@ func processing() {
 			// var ptValue, _ = BackendBatchQueue.LoadOrStore(batchNo, x)
 			// var ptNum = ptValue.(*uint32)
 			// atomic.AddUint32(ptNum, 1)
-			var x, ok = BackendBatchQueue.Load(batchNo)
-			var num = 1
+			var val = 1
+			var num, ok = BackendBatchQueue.Load(batchNo)
 			if ok {
-				num = x.(int) + 1
+				val = num.(int) + 1
 			}
-			BackendBatchQueue.Store(batchNo, num)
+			fmt.Println("BatchReceivedCountChan", batchNo)
+			BackendBatchQueue.Store(batchNo, val)
 			tmpBatchQueue[batchNo] = false
 
 			processAllCachedBatches(false)
@@ -88,12 +98,11 @@ func agregateForTraceID() {
 			newInfoArr := []string{}
 			traceInfoCache := common.GetTraceInfo(traceID)
 
-			for _, url := range common.ClientHosts {
-				urlParts := strings.Split(url, ":")
-				traceInfo := common.GetTraceInfo(traceID + "-" + urlParts[2])
+			for i, _ := range common.ClientHosts {
+				traceInfo := common.GetTraceInfo(traceID + "-" + strconv.Itoa(i))
 				newInfoArr = append(newInfoArr, traceInfo.Records...)
 			}
-			traceInfoCache.Records = append(traceInfoCache.Records, newInfoArr...)
+			traceInfoCache.Records = newInfoArr
 			if traceInfoCache != nil && len(traceInfoCache.Records) > 0 {
 				// sort
 				traceInfoCache.SortRecords()

@@ -65,6 +65,8 @@ var BatchReceivedCountChan = make(chan int, 10)
 var GenCheckSumToQueueChan = make(chan string)
 
 // ------------ Common ----------------- //
+var ReadyChan = make(chan string)
+
 var FinishedChan = make(chan string)
 
 var ClientRecvWSChan = make(chan string)

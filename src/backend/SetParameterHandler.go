@@ -2,6 +2,8 @@ package backend
 
 import (
 	"os"
+	"tail-based-sampling/src/common"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -13,9 +15,12 @@ func SetParameterGetHandler(ctx *gin.Context) {
 
 	os.Setenv("UPLOAD_SERVER_PORT", port)
 
-	go processing()
-
 	ctx.String(200, "OK!")
+
+	go func(port string) {
+		time.Sleep(time.Millisecond * 10)
+		common.ReadyChan <- port
+	}(port)
 }
 
 func SetParameterPostHandler(ctx *gin.Context) {
