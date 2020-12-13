@@ -5,19 +5,21 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	cmap "github.com/orcaman/concurrent-map"
 )
 
 // RecordTemplate is a template for record down each line of trace record info
 type RecordTemplate struct {
-	HasError    bool
-	BatchNo     int
-	LifeTime    int
-	Records     []string
-	SyncRecords sync.Map
+	HasError bool
+	BatchNo  int
+	LifeTime int
+	Records  []string
+	// SyncRecords sync.Map
 }
 
 // CacheQueue is to store the records
-var CacheQueue = sync.Map{}
+var CacheQueue = cmap.New()
 
 // BadTraceIDList is recording down the bad trace IDs
 var BadTraceIDList = []string{}
@@ -34,18 +36,6 @@ func (data *RecordTemplate) UpdateRecord(record string) {
 
 // SortRecords is sorting the records field
 func (data *RecordTemplate) SortRecords() {
-	// bubbleSort
-	// len := len(data.Records)
-	// for i := 0; i < len-1; i++ {
-	// 	for j := 0; j < len-1-i; j++ {
-	// 		arrJ, _ := strconv.Atoi(strings.Split(data.Records[j], "|")[1])
-	// 		arrJ1, _ := strconv.Atoi(strings.Split(data.Records[j+1], "|")[1])
-
-	// 		if arrJ > arrJ1 {
-	// 			data.Records[j], data.Records[j+1] = data.Records[j+1], data.Records[j]
-	// 		}
-	// 	}
-	// }
 	quicksort(data.Records)
 }
 
@@ -79,7 +69,7 @@ func (data *RecordTemplate) GenCheckSumToQueue(traceID string, result map[string
 
 // GetTraceInfo is getting the traceInfo
 func GetTraceInfo(traceID string) *RecordTemplate {
-	traceCacheInfo, _ := CacheQueue.Load(traceID)
+	traceCacheInfo, _ := CacheQueue.Get(traceID)
 	traceInfo := &RecordTemplate{}
 	if traceCacheInfo != nil {
 		traceInfo = traceCacheInfo.(*RecordTemplate)
@@ -89,5 +79,5 @@ func GetTraceInfo(traceID string) *RecordTemplate {
 
 // SetTraceInfo is setting the traceInfo
 func SetTraceInfo(traceID string, data *RecordTemplate) {
-	CacheQueue.Store(traceID, data)
+	CacheQueue.Set(traceID, data)
 }

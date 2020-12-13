@@ -3,6 +3,7 @@ package backend
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"tail-based-sampling/src/common"
 	"time"
@@ -23,7 +24,6 @@ func StartBackendProcess() {
 
 	fmt.Println(port)
 	processing()
-	// processing()
 }
 
 func processing() {
@@ -31,8 +31,6 @@ func processing() {
 	defer close(common.FinishedChan)
 
 	go agregateForTraceID()
-
-	// go wsWriteLoop()
 
 	go gRPCWriteLoop()
 
@@ -44,12 +42,12 @@ func processing() {
 			// var ptNum = ptValue.(*uint32)
 			// atomic.AddUint32(ptNum, 1)
 			var val = 1
-			var num, ok = BackendBatchQueue.Load(batchNo)
+			var num, ok = BackendBatchQueue.Get(strconv.Itoa(batchNo))
 			if ok {
 				val = num.(int) + 1
 			}
-			fmt.Println("BatchReceivedCountChan", batchNo)
-			BackendBatchQueue.Store(batchNo, val)
+			fmt.Printf("BatchReceivedCountChan %d, count %d \n", batchNo, val)
+			BackendBatchQueue.Set(strconv.Itoa(batchNo), val)
 			tmpBatchQueue[batchNo] = false
 
 			processAllCachedBatches(false)
@@ -80,28 +78,30 @@ func processing() {
 
 func agregateForTraceID() {
 	for traceID := range common.ReceivedTraceInfoChan {
-		var x = new(uint32)
-		var ptValue, _ = BackendReceivedTraceInfo.LoadOrStore(traceID, x)
-		var ptNum = ptValue.(*uint32)
-		atomic.AddUint32(ptNum, 1)
-		// fmt.Println(*ptNum)
 
-		// var x, ok = BackendReceivedTraceInfo.Load(traceID)
-		// var num = 1
-		// if ok {
-		// 	num = x.(int) + 1
-		// }
-		// BackendReceivedTraceInfo.Store(traceID, *ptNum)
+		var val = 1
+		var num, ok = BackendReceivedTraceInfoCount.Get(traceID)
+		if ok {
+			val = num.(int) + 1
+		}
+		BackendReceivedTraceInfoCount.Set(traceID, val)
 
-		if int(*ptNum) >= len(common.ClientHosts) {
+		if val >= len(common.ClientHosts) {
 
 			newInfoArr := []string{}
 			traceInfoCache := common.GetTraceInfo(traceID)
 
-			for i, _ := range common.ClientHosts {
-				traceInfo := common.GetTraceInfo(traceID + "-" + strconv.Itoa(i))
+			for _, url := range common.ClientHosts {
+				urlParts := strings.Split(url, ":")
+				traceInfo := common.GetTraceInfo(traceID + "-" + urlParts[2])
 				newInfoArr = append(newInfoArr, traceInfo.Records...)
+				if common.IS_DEBUG && traceID == common.DEBUG_TRACE_ID {
+					fmt.Println("--------", traceID+"-"+urlParts[2])
+					fmt.Println(traceInfo.Records)
+				}
+				// common.CacheQueue.Remove(traceID + "-" + urlParts[2])
 			}
+
 			traceInfoCache.Records = newInfoArr
 			if traceInfoCache != nil && len(traceInfoCache.Records) > 0 {
 				// sort
@@ -112,14 +112,10 @@ func agregateForTraceID() {
 				// generate checkSum to result queue
 				tmpCheckSumQueue[traceID] = traceInfoCache
 				tmpCheckSumQueue[traceID].GenCheckSumToQueue(traceID, resultQueue)
-				// common.GenCheckSumToQueueChan <- traceID
-			}
-			for i, _ := range common.ClientHosts {
-				common.CacheQueue.Delete(traceID + "-" + strconv.Itoa(i))
 			}
 
-			BackendReceivedTraceInfo.Delete(traceID)
-			common.CacheQueue.Delete(traceID)
+			BackendReceivedTraceInfo.Remove(traceID)
+			common.CacheQueue.Remove(traceID)
 
 		}
 		wg.Done()
@@ -131,44 +127,46 @@ func processAllCachedBatches(lastBatch bool) {
 		fmt.Println("processing")
 	}
 	var sendNum uint64 = 0
+	var bufferToSend = []string{}
 
 	for tmpBatchNo, _ := range tmpBatchQueue {
-		// var t, _ = BackendBatchQueue.Load(tmpBatchNo)
-		// var num = t.(*uint32)
-		var t, _ = BackendBatchQueue.Load(tmpBatchNo)
+		var t, _ = BackendBatchQueue.Get(strconv.Itoa(tmpBatchNo))
 		var num = t.(int)
 
 		if common.IS_DEBUG {
-			fmt.Println("tmpBatchQueue[", tmpBatchNo, "] - BackendBatchQueue[", tmpBatchNo, "]: ", num)
+			fmt.Printf("tmpBatchQueue[%d] - BackendBatchQueue[%d]: %d \n", tmpBatchNo, tmpBatchNo, num)
 		}
 
 		if lastBatch || (num >= len(common.ClientHosts) && len(tmpBatchQueue) >= BATCH_GATE) {
-			BackendTraceIDQueue.Range(func(k, v interface{}) bool {
-				batchNo := v.(int)
+			for e := range BackendTraceIDQueue.IterBuffered() {
+				batchNo := e.Val.(int)
 
 				if tmpBatchNo == batchNo {
-					traceID := k.(string)
+					traceID := e.Key
 
 					atomic.AddUint64(&sendNum, uint64(len(common.ClientHosts)))
-					common.ServerSendWSChan <- traceID
 
-					BackendTraceIDQueue.Delete(k)
-					BackendBatchQueue.Delete(v.(int))
-					tmpBatchQueue[v.(int)] = true
+					bufferToSend = append(bufferToSend, traceID)
+
+					BackendTraceIDQueue.Remove(traceID)
+					BackendBatchQueue.Remove(strconv.Itoa(batchNo))
+					tmpBatchQueue[tmpBatchNo] = true
 				}
-				return true
-			})
-			if common.IS_DEBUG {
-				fmt.Println("BatchNo", tmpBatchNo, ", Sent numbers: ", sendNum)
 			}
 		}
 	}
+
+	for i := 0; i < len(bufferToSend); i++ {
+		common.ServerSendWSChan <- bufferToSend[i]
+		if i >= 100 && i%100 == 0 {
+			time.Sleep(time.Millisecond * 300)
+		}
+	}
+
 	for k, v := range tmpBatchQueue {
 		if v {
 			delete(tmpBatchQueue, k)
 		}
 	}
-	if lastBatch {
-		close(common.GenCheckSumToQueueChan)
-	}
+	fmt.Println("Sent numbers: ", sendNum)
 }

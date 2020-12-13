@@ -3,7 +3,6 @@ package client
 import (
 	"context"
 	"flag"
-	"fmt"
 	"io"
 	"log"
 	"tail-based-sampling/src/common"
@@ -47,14 +46,11 @@ func runTraceChat() {
 	if err != nil {
 		log.Fatalf("%v.TraceChat(_) = _, %v", client, err)
 	}
-	// messages := []*pb.PayloadMessage{
-	// 	{Action: "ReturnWrongTrace", ID: "123123123123", Records: []string{"abc"}},
-	// 	{Action: "ReturnWrongTrace", ID: "3453453453453", Records: []string{"34545"}},
-	// }
+	clientIDmsg := &pb.PayloadMessage{Action: "SetClientID", ID: common.GetEnvDefault("SERVER_PORT", ""), Records: []string{}}
 	// for _, msg := range messages {
-	// 	if err := stream.Send(msg); err != nil {
-	// 		log.Fatalf("Failed to send a note: %v", err)
-	// 	}
+	if err := stream.Send(clientIDmsg); err != nil {
+		log.Fatalf("Failed to set Client ID: %v", err)
+	}
 	// }
 	// waitc := make(chan struct{})
 	// go func() {
@@ -80,27 +76,14 @@ func runTraceChat() {
 }
 
 func gRPCReturnWrongTrace(traceID string) {
-	// batchNo, _ := strconv.Atoi(c.Params("batchNo"))
-	data := &common.RecordTemplate{HasError: true, BatchNo: 0, Records: []string{}}
-	traceInfo := common.GetTraceInfo(traceID)
 
-	if common.IS_DEBUG && traceID == common.DEBUG_TRACE_ID {
-		fmt.Println(traceInfo)
-	}
-	if traceInfo != nil {
-		traceInfo.SyncRecords.Range(func(k, v interface{}) bool {
-			traceInfo.Records = append(traceInfo.Records, k.(string))
-			return true
-		})
-		data = traceInfo
-	}
-
-	defer common.CacheQueue.Delete(traceID)
+	var result = []string{}
+	common.TraceInfoStore.Get(traceID, &result)
 
 	payload := &trace.PayloadMessage{
 		Action:  "ReturnWrongTrace",
 		ID:      traceID,
-		Records: data.Records,
+		Records: result,
 	}
 	// payload.ReturnWrongTraceGen(traceID, payload)
 

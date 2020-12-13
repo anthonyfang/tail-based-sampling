@@ -15,6 +15,7 @@ import (
 
 var isRunning = false
 var counter uint64 = 0
+var badTraceCounter int32 = 0
 
 func getURL(port string) string {
 	var url string
@@ -96,14 +97,9 @@ func fetchData(url string) {
 
 		close(common.NewLineChan)
 		for msg := range common.FinishedChan {
-			if msg == "readline" {
-				TimeChan <- timeWindowEnd + 1
-				common.Wg.Wait()
-				close(TimeChan)
-			}
-
 			if msg == "timeWindow" {
-				fmt.Println("xxxxxxxxxxxxxxxxxx: pushed ", counter)
+				fmt.Println("xxxxxxxxxxxxxxxxxx: fetched ", counter)
+				fmt.Println("xxxxxxxxxxxxxxxxxx: bad traces sent ", badTraceCounter)
 				go postFinishSignal()
 
 				fmt.Println("################# : fetchingData END", time.Now())
@@ -115,11 +111,6 @@ func fetchData(url string) {
 }
 
 func postFinishSignal() {
-	// var payload = new(common.Payload)
-	// payload.SendFinishGen(common.GetEnvDefault("SERVER_PORT", "8002"))
-
-	// msg, _ := json.Marshal(payload)
-
 	payload := &trace.PayloadMessage{
 		Action:  "SendFinished",
 		ID:      "0",

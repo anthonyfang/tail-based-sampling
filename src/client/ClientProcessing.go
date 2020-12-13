@@ -9,6 +9,9 @@ import (
 	"sync/atomic"
 	"tail-based-sampling/src/common"
 	"tail-based-sampling/src/trace"
+	"time"
+
+	cmap "github.com/orcaman/concurrent-map"
 )
 
 const (
@@ -17,159 +20,114 @@ const (
 	BATCH_GATE  = 3
 )
 
-var batchNo int32 = 1
+var batchNo int32 = 0
 var currentTime int64 = 0
 var timeWindowStart int64 = 0
 var timeWindowEnd int64 = 0
 
-var TimeChan = make(chan int64)
+var batchMap = cmap.New()
 
 func StartClientProcess() {
 	port := <-common.ReadyChan
-
+	time.Sleep(time.Millisecond * 10)
 	url := getURL("8080")
 	fmt.Println(port)
 
+	common.TraceInfoStore.New()
+
 	go runTraceChat()
-	go windowing()
-	// gRPCconnect()
+
 	go processing()
-	// time.Sleep(time.Second * 10)
+
 	fetchData(url)
 }
 
 func processing() {
 	fmt.Println("Running Readline process...")
 	for newline := range common.NewLineChan {
+		// atomic.AddUint64(&counter, 1)
+		// if counter%100000 == 0 {
+		// 	fmt.Println(newline.Line[:48])
+		// }
 		pushToCache(newline.Line, newline.BatchNo)
-	}
-	common.FinishedChan <- "readline"
-}
 
-func windowing() {
-	fmt.Println("Running Windowing process...")
-	for val := range TimeChan { // tigger time window
-		rollOver := false
-		if timeWindowStart == 0 {
-			timeWindowStart = val
-			timeWindowEnd = timeWindowStart + int64(TIME_WINDOW*1000000)
-		} else {
-			if val > timeWindowEnd {
-				rollOver = true
-				timeWindowStart = val + int64(ROLLING*1000000)
-				timeWindowEnd = timeWindowStart + int64(TIME_WINDOW*1000000)
+		if counter > 0 && counter%5000 == 0 {
+			record := strings.Split(newline.Line, "|")
+
+			if len(record) > 8 {
+
+				currentTime, _ = strconv.ParseInt(record[1], 10, 64)
+				rollOver := false
+				if timeWindowStart == 0 {
+					timeWindowStart = currentTime
+					timeWindowEnd = timeWindowStart + int64(TIME_WINDOW*1000000)
+				} else {
+					if currentTime > timeWindowEnd {
+						rollOver = true
+						timeWindowStart = currentTime + int64(ROLLING*1000000)
+						timeWindowEnd = timeWindowStart + int64(TIME_WINDOW*1000000)
+					}
+				}
+
+				if rollOver {
+					common.Wg.Add(1)
+					atomic.AddInt32(&batchNo, 1)
+
+					if common.IS_DEBUG {
+						fmt.Printf("triggered send IDs, batch %d - current count %d \n", batchNo, counter)
+					}
+
+					var badListLocker = sync.Mutex{}
+					badListLocker.Lock()
+					badTraceIDList := common.BadTraceIDList
+					common.BadTraceIDList = []string{}
+					badListLocker.Unlock()
+
+					go postTraceIDs(int(batchNo), badTraceIDList, false)
+				}
 			}
 		}
 
-		if rollOver {
-			common.Wg.Add(1)
-			postTraceIDs(int(batchNo))
-			atomic.AddInt32(&batchNo, 1)
+		if counter > 0 && counter%1000000 == 0 {
+			common.TraceInfoStore.HouskeepTill(20000)
 
-			go func() {
-				if batchNo%10 == 0 {
-					common.CacheQueue.Range(func(k, v interface{}) bool {
-						if len(k.(string)) > 8 {
-							traceInfo := v.(*common.RecordTemplate)
-							if traceInfo.LifeTime > BATCH_GATE {
-								common.CacheQueue.Delete(k)
-							} else {
-								traceInfo.LifeTime++
-							}
-						} else {
-							num := k.(string)
-							numInt, _ := strconv.Atoi(num)
-							if numInt < int(batchNo)-BATCH_GATE*5 {
-								common.CacheQueue.Delete(k)
-							}
-						}
-						return true
-					})
+			for e := range batchMap.IterBuffered() {
+				key, _ := strconv.Atoi(e.Key)
+				if key < int(batchNo)-BATCH_GATE*5 {
+					batchMap.Remove(e.Key)
 				}
-			}()
-			// fmt.Println("batchNo: ", batchNo)
+			}
 		}
 	}
 	common.Wg.Wait()
 
 	common.Wg.Add(1)
-	postTraceIDs(int(batchNo))
+	var badListLocker = sync.Mutex{}
+	badListLocker.Lock()
+	badTraceIDList := common.BadTraceIDList
+	common.BadTraceIDList = []string{}
+	badListLocker.Unlock()
+
+	atomic.AddInt32(&batchNo, 1)
+	postTraceIDs(int(batchNo), badTraceIDList, true)
+
 	common.Wg.Wait()
 	common.FinishedChan <- "timeWindow"
 }
 
-func postTraceIDs(batchNo int) {
-	var badListLocker = sync.Mutex{}
-
-	if common.IS_DEBUG {
-		fmt.Println("triggered send IDs, current count: ", counter)
-	}
-	go func(batchNo int) {
-		badListLocker.Lock()
-		badTraceIDList := common.BadTraceIDList
-		common.BadTraceIDList = []string{}
-
-		common.CacheQueue.Store(strconv.Itoa(batchNo), badTraceIDList)
-
-		if batchNo > 1 {
-			// var payload = new(common.Payload)
-			previousBatch := batchNo - 1
-			badTraceIDs, _ := common.CacheQueue.Load(strconv.Itoa(previousBatch))
-
-			// payload.SetWrongTraceIDGen(strconv.Itoa(previousBatch), badTraceIDs.([]string))
-
-			payload := &trace.PayloadMessage{
-				Action:  "SetWrongTraceID",
-				ID:      strconv.Itoa(previousBatch),
-				Records: badTraceIDs.([]string),
-			}
-			// msg, _ := json.Marshal(payload)
-			if err := (*gRPCstream).Send(payload); err != nil {
-				log.Fatal(err)
-
-			}
-		}
-		badTraceIDList = []string{}
-		badListLocker.Unlock()
-		common.Wg.Done()
-	}(batchNo)
-}
-
 func pushToCache(recordString string, batchNo int) {
 	record := strings.Split(recordString, "|")
-	traceID := record[0]
 
-	// validate error record
-	hasError := false
 	if len(record) > 8 {
-		currentTime, _ = strconv.ParseInt(record[1], 10, 64)
+		traceID := record[0]
+
+		// validate error record
+		hasError := false
+
 		hasError = isErrorRecord(record[8])
 		// add the line to cache server
-		traceCacheInfo, _ := common.CacheQueue.Load(traceID)
-		data := &common.RecordTemplate{hasError, batchNo, 0, []string{}, sync.Map{}}
 
-		if traceCacheInfo != nil {
-			traceInfo := traceCacheInfo.(*common.RecordTemplate)
-			newHasError := traceInfo.HasError
-			if !newHasError {
-				newHasError = hasError
-			}
-			traceInfo.HasError = newHasError
-
-			traceInfo.SyncRecords.Store(recordString, batchNo)
-
-			if common.IS_DEBUG && traceID == common.DEBUG_TRACE_ID {
-				fmt.Println("Add Trace: ", recordString)
-			}
-		} else {
-			data.BatchNo = batchNo
-			data.SyncRecords.Store(recordString, batchNo)
-			common.CacheQueue.Store(traceID, data)
-
-			if common.IS_DEBUG && traceID == common.DEBUG_TRACE_ID {
-				fmt.Println("New Trace: ", recordString)
-			}
-		}
+		common.TraceInfoStore.Add(traceID, recordString)
 
 		atomic.AddUint64(&counter, 1)
 
@@ -177,8 +135,38 @@ func pushToCache(recordString string, batchNo int) {
 			common.BadTraceIDList = append(common.BadTraceIDList, traceID)
 		}
 
-		TimeChan <- currentTime
 	}
+}
+
+func postTraceIDs(batchNo int, badTraceIDList []string, last bool) {
+
+	batchMap.Set(strconv.Itoa(batchNo), badTraceIDList)
+
+	if batchNo > 1 {
+		previousBatch := batchNo - 1
+		badTraceIDs, _ := batchMap.Get(strconv.Itoa(previousBatch))
+
+		if last {
+			badTraceIDs = append(badTraceIDs.([]string), badTraceIDList...)
+		}
+
+		var added = len(badTraceIDs.([]string))
+		atomic.AddInt32(&badTraceCounter, int32(added))
+
+		if badTraceIDs != nil && len(badTraceIDs.([]string)) > 0 {
+			payload := &trace.PayloadMessage{
+				Action:  "SetWrongTraceID",
+				ID:      strconv.Itoa(previousBatch),
+				Records: badTraceIDs.([]string),
+			}
+			if err := (*gRPCstream).Send(payload); err != nil {
+				log.Fatal(err)
+
+			}
+		}
+
+	}
+	common.Wg.Done()
 }
 
 func isErrorRecord(tags string) bool {

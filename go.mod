@@ -4,8 +4,10 @@ go 1.15
 
 require (
 	github.com/gin-gonic/gin v1.6.3
+	github.com/gofiber/websocket/v2 v2.0.2
 	github.com/golang/protobuf v1.4.3
 	github.com/gorilla/websocket v1.4.2
+	github.com/orcaman/concurrent-map v0.0.0-20190826125027-8c72a8bb44f6
 	github.com/soheilhy/cmux v0.1.4
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9 // indirect
 	golang.org/x/net v0.0.0-20201209123823-ac852fbbde11

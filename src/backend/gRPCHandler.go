@@ -16,6 +16,8 @@ var gRPCstreams = []*trace.TraceService_TraceChatServer{}
 func (s *Server) TraceChat(stream trace.TraceService_TraceChatServer) error {
 
 	gRPCstreams = append(gRPCstreams, &stream)
+
+	var clientID = ""
 	// messages := []*pb.PayloadMessage{
 	// 	{Action: "GetWrongTrace", ID: "123123123123", Records: []string{}},
 	// 	{Action: "GetWrongTrace", ID: "3453453453453", Records: []string{}},
@@ -36,17 +38,18 @@ func (s *Server) TraceChat(stream trace.TraceService_TraceChatServer) error {
 			break
 		}
 
-		// log.Printf("Got message for action %s %s", in.Action, in.ID)
-
 		switch in.Action {
+		case "SetClientID":
+			clientID = in.ID
 		case "SetWrongTraceID":
 			batchNo, _ := strconv.Atoi(in.ID)
-
+			// log.Printf("Got message for action %s %s", in.Action, in.ID)
+			// fmt.Println(in.Records)
 			gRPCProcessWrongTraceID(batchNo, in.Records)
 
 		case "ReturnWrongTrace":
 
-			gRPCProcessWrongTrace(stream, in.ID, in.Records)
+			gRPCProcessWrongTrace(clientID, in.ID, in.Records)
 		case "SendFinished":
 			common.FinishedChan <- in.ID
 		default:
@@ -80,13 +83,13 @@ func gRPCWriteLoop() {
 func gRPCProcessWrongTraceID(batchNo int, records []string) {
 
 	for _, v := range records {
-		BackendTraceIDQueue.Store(v, batchNo)
+		BackendTraceIDQueue.Set(v, batchNo)
 	}
 
 	common.BatchReceivedCountChan <- batchNo
 }
 
-func gRPCProcessWrongTrace(stream trace.TraceService_TraceChatServer, traceID string, records []string) {
+func gRPCProcessWrongTrace(clientID string, traceID string, records []string) {
 
 	// Push into the cache server
 	if common.IS_DEBUG && traceID == common.DEBUG_TRACE_ID {
@@ -98,14 +101,7 @@ func gRPCProcessWrongTrace(stream trace.TraceService_TraceChatServer, traceID st
 	data := &common.RecordTemplate{HasError: true, BatchNo: 0, Records: []string{}}
 	data.Records = records
 
-	if len(records) > 0 {
-		val := 1
-		num, ok := BackendTraceIDQueue.Load(traceID)
-		if ok {
-			val = num.(int) + 1
-		}
-		common.SetTraceInfo(traceID+"-"+strconv.Itoa(val), data)
-	}
+	common.SetTraceInfo(traceID+"-"+clientID, data)
 
 	common.ReceivedTraceInfoChan <- traceID
 	// fmt.Println(data.Records)
